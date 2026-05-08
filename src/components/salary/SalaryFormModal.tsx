@@ -1,0 +1,262 @@
+"use client";
+
+import { useActionState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogBody,
+  DialogFooter,
+  DialogCloseButton,
+} from "@/components/ui/dialog";
+import {
+  createSalaryAction,
+  updateSalaryAction,
+  type SalaryActionState,
+} from "@/app/salary/actions";
+import type { PaymentMethodRow, ExpenseWithRefs } from "@/lib/supabase/types";
+
+interface Props {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  expense?: ExpenseWithRefs;
+  paymentMethodRows: PaymentMethodRow[];
+}
+
+const SALARY_STATUSES = [
+  { value: "draft", label: "Draft" },
+  { value: "verified", label: "Verified" },
+  { value: "needs_review", label: "Needs Review" },
+];
+
+/** "Salary for May 2026" → "2026-05" */
+function descriptionToMonth(description: string | null): string {
+  if (!description) return "";
+  const match = description.match(/^Salary for (\w+) (\d{4})$/);
+  if (!match) return "";
+  const names: Record<string, string> = {
+    January: "01", February: "02", March: "03", April: "04",
+    May: "05", June: "06", July: "07", August: "08",
+    September: "09", October: "10", November: "11", December: "12",
+  };
+  const m = names[match[1]];
+  return m ? `${match[2]}-${m}` : "";
+}
+
+function currentMonth(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function FormField({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-foreground mb-1.5">
+        {label}
+        {required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+const inputCls =
+  "w-full h-9 px-3 text-sm rounded-lg border border-border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors disabled:opacity-60";
+
+const selectCls =
+  "w-full h-9 px-3 text-sm rounded-lg border border-border bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors disabled:opacity-60 appearance-none cursor-pointer";
+
+export default function SalaryFormModal({
+  open,
+  onOpenChange,
+  expense,
+  paymentMethodRows,
+}: Props) {
+  const router = useRouter();
+  const isEdit = !!expense;
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const action = isEdit ? updateSalaryAction : createSalaryAction;
+  const [state, formAction, isPending] = useActionState<SalaryActionState | null, FormData>(
+    action,
+    null
+  );
+
+  useEffect(() => {
+    if (state?.success) {
+      onOpenChange(false);
+      router.refresh();
+    }
+  }, [state?.success]);
+
+  useEffect(() => {
+    if (!open) {
+      formRef.current?.reset();
+    }
+  }, [open]);
+
+  const today = new Date().toISOString().split("T")[0];
+  const defaultMonth = expense
+    ? descriptionToMonth(expense.description)
+    : currentMonth();
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {isEdit ? "Edit Salary Expense" : "Add Salary Expense"}
+          </DialogTitle>
+          <DialogCloseButton />
+        </DialogHeader>
+
+        <form ref={formRef} action={formAction}>
+          {isEdit && (
+            <input type="hidden" name="expense_id" value={expense.id} />
+          )}
+
+          <DialogBody className="space-y-4">
+            {state?.error && (
+              <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700">
+                {state.error}
+              </div>
+            )}
+
+            {/* Row 1: Employee Name + Salary Month */}
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="Employee / Contractor Name" required>
+                <input
+                  type="text"
+                  name="vendor"
+                  required
+                  disabled={isPending}
+                  defaultValue={expense?.vendor ?? ""}
+                  placeholder="e.g. Rahul Sharma"
+                  className={inputCls}
+                />
+              </FormField>
+              <FormField label="Salary Month">
+                <input
+                  type="month"
+                  name="salary_month"
+                  disabled={isPending}
+                  defaultValue={defaultMonth}
+                  className={inputCls}
+                />
+              </FormField>
+            </div>
+
+            {/* Row 2: Payment Date + Amount */}
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="Payment Date" required>
+                <input
+                  type="date"
+                  name="expense_date"
+                  required
+                  disabled={isPending}
+                  defaultValue={expense?.expense_date ?? today}
+                  className={inputCls}
+                />
+              </FormField>
+              <FormField label="Amount" required>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                    ₹
+                  </span>
+                  <input
+                    type="number"
+                    name="amount"
+                    required
+                    min="0"
+                    step="0.01"
+                    disabled={isPending}
+                    defaultValue={expense?.amount ?? ""}
+                    placeholder="0.00"
+                    className={inputCls + " pl-7"}
+                  />
+                </div>
+              </FormField>
+            </div>
+
+            {/* Row 3: Payment Method + Status */}
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="Payment Method" required>
+                <select
+                  name="payment_method_id"
+                  required
+                  disabled={isPending}
+                  defaultValue={expense?.payment_method_id ?? ""}
+                  className={selectCls}
+                >
+                  <option value="">Select…</option>
+                  {paymentMethodRows.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField label="Status" required>
+                <select
+                  name="status"
+                  required
+                  disabled={isPending}
+                  defaultValue={expense?.status ?? "draft"}
+                  className={selectCls}
+                >
+                  {SALARY_STATUSES.map((s) => (
+                    <option key={s.value} value={s.value}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+            </div>
+
+            {/* Row 4: Notes */}
+            <FormField label="Notes">
+              <textarea
+                name="notes"
+                rows={2}
+                disabled={isPending}
+                defaultValue={expense?.notes ?? ""}
+                placeholder="Optional"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors resize-none disabled:opacity-60"
+              />
+            </FormField>
+          </DialogBody>
+
+          <DialogFooter>
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => onOpenChange(false)}
+              className="px-4 py-2 rounded-lg border border-border bg-white text-sm font-medium text-foreground hover:bg-muted disabled:opacity-60 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isPending}
+              className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 disabled:opacity-60 transition-colors"
+            >
+              {isPending
+                ? isEdit ? "Saving…" : "Adding…"
+                : isEdit ? "Save Changes" : "Add Salary Expense"}
+            </button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
