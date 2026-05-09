@@ -137,7 +137,7 @@ npm run start -- -p 3001
 
 Production mode uses `next start`, which serves the pre-built output without Turbopack. The server is stable and does not suffer from the SST cache corruption issues seen in dev mode.
 
-Latest audit result: production mode passed sign-in, dashboard, expenses, upload page, unpaid invoice save, unpaid invoice listing, mark-paid with payment proof upload, payment proof preview, and original invoice/receipt preview. Phase 3D flexible capture and Phase 3E review/attention features have also been implemented and tested. The audit test data from the earlier production-mode pass was cleaned up afterward.
+Latest audit result: production mode passed sign-in, dashboard, expenses, upload page, unpaid invoice save, unpaid invoice listing, mark-paid with payment proof upload, payment proof preview, and original invoice/receipt preview. Phase 3D flexible capture, Phase 3E review/attention, Phase 4A monthly reports/CSV exports, and Phase 4B Expense Detail Drawer have also been implemented and tested. The audit test data from the earlier production-mode pass was cleaned up afterward.
 
 ---
 
@@ -195,6 +195,16 @@ If production output looks inconsistent, confirm no process is running `next dev
 - Attention badges and dashboard review queue use existing fields: `status`, `ai_confidence`, `payment_status`, `paid_amount`, `amount`, `payment_proof_file_path`, `invoice_number`, and `payment_reference`.
 - Duplicate detection should warn or mark `needs_review`; it should not block saves.
 
+### Reports Derivation
+- Monthly reports are derived in `src/lib/reports-data.ts` from existing expense rows; no reporting tables are used.
+- The reports page calls `GET /api/reports/monthly?month=YYYY-MM`.
+- CSV exports are client-side downloads generated from the monthly report data.
+
+### Expense Detail Drawer
+- The detail drawer lives at `src/components/expenses/ExpenseDetailDrawer.tsx` and is opened from `ExpensesTable`.
+- It reuses existing signed document preview, edit, mark-paid, and delete flows.
+- It displays compact `raw_ai_json` fields and `fields_needing_review`; do not replace this with a large raw JSON dump by default.
+
 ### Instrumentation
 - `src/instrumentation.ts` absorbs transient ETIMEDOUT/ECONNRESET socket errors from the Supabase client
 - These errors are Supabase free-tier cold-start artifacts, not application bugs
@@ -211,6 +221,12 @@ If production output looks inconsistent, confirm no process is running `next dev
 - [ ] Expenses page loads with expense rows
 - [ ] Expenses Attention badges render compactly
 - [ ] Expenses Review filter works for possible duplicate, missing proof, amount mismatch, and low AI confidence
+- [ ] Click View Details in Expenses -> detail drawer opens
+- [ ] Detail drawer shows full expense/payment/document fields
+- [ ] Detail drawer primary document action opens signed preview
+- [ ] Detail drawer payment proof action opens signed preview when proof exists
+- [ ] Detail drawer AI extraction summary and review issues render when present
+- [ ] Detail drawer Edit, Mark Paid, and Delete actions hand off to existing flows
 - [ ] Add expense -> appears in list
 - [ ] Likely duplicate create/save marks the new record for review without blocking save
 - [ ] Edit expense -> changes reflected
@@ -226,6 +242,9 @@ If production output looks inconsistent, confirm no process is running `next dev
 - [ ] Mark unpaid invoice as paid -> payment status updated
 - [ ] Mark Paid can upload proof and still works with manual fallback
 - [ ] Payment status badges show in Expenses table
+- [ ] Reports page loads
+- [ ] Reports month selector updates the selected period
+- [ ] Reports CSV export buttons download valid CSV files
 - [ ] Salary page loads with salary-type expenses
 - [ ] `npx tsc --noEmit` passes
 - [ ] `npm run build` passes

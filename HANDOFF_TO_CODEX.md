@@ -2,17 +2,19 @@
 
 ## Project Summary
 
-ExpenseDesk is a small-business expense management app built with Next.js 16.2.6 (App Router), Supabase (auth, database, storage), and OpenAI (receipt extraction). The app supports bill/invoice capture, receipt/payment proof upload, AI-powered data extraction with mandatory user review, expense CRUD, salary tracking, invoice payment status, flexible bill/payment capture, and a lightweight review/attention queue.
+ExpenseDesk is a small-business expense management app built with Next.js 16.2.6 (App Router), Supabase (auth, database, storage), and OpenAI (receipt extraction). The app supports bill/invoice capture, receipt/payment proof upload, AI-powered data extraction with mandatory user review, expense CRUD, salary tracking, invoice payment status, flexible bill/payment capture, a lightweight review/attention queue, monthly reports with CSV exports, and an Expense Detail Drawer for inspecting individual records.
 
 ## Current Status
 
-- **All application code is written** through Phase 3E (review queue + duplicate/suspicious expense detection)
+- **All application code is written** through Phase 4B (Expense Detail Drawer)
 - **TypeScript compiles cleanly** (`npx tsc --noEmit` passes)
 - **Production build passes** (`npm run build` with `--webpack` flag)
 - **Production-mode audit passed** for the core Phase 3C flows
 - **Phase 3C database migration is applied** in the current Supabase database
 - **Phase 3D flexible bill/payment capture is implemented and tested**
 - **Phase 3E review/attention system is implemented and tested**
+- **Phase 4A monthly reports and CSV exports are implemented and tested**
+- **Phase 4B Expense Detail Drawer is implemented and tested**
 - **MarkPaidModal FormData bug is fixed**
 - **Audit test data has been cleaned up** from the current Supabase database and `receipts` bucket
 - **Dev server (Turbopack) has been unreliable** — repeated crashes with manifest/cache errors that are not caused by application code
@@ -37,6 +39,10 @@ The audit also verified that Phase 3C migration is applied in the current Supaba
 
 Phase 3E added a lightweight review/attention system. Review issues are derived in code using existing fields, not a new table. It supports possible duplicate detection, unpaid/partially paid invoice attention items, amount mismatch warnings, missing proof warnings, low AI confidence indicators, Expenses review filters, and a Dashboard Needs Attention queue. The audit test expense rows and storage files were cleaned up afterward.
 
+Phase 4A added monthly reports and CSV exports. The Reports page now includes a month selector, monthly summary, category summary, vendor summary, payment status report, salary report, needs-attention report, unpaid invoice report, and CSV downloads. Report data is derived from existing expense rows via `src/lib/reports-data.ts` and `GET /api/reports/monthly?month=YYYY-MM`.
+
+Phase 4B added an Expense Detail Drawer. The Expenses table has a View Details action that opens a right-side drawer showing full expense, payment, and document fields; primary document and payment proof preview actions; AI extraction confidence and compact summary; derived review issues; and actions for edit, mark-paid, and delete using the existing flows.
+
 ---
 
 ## Exact Next Steps
@@ -57,7 +63,7 @@ Open http://localhost:3001 and confirm the server starts without errors. This is
 ### Step 2: Continue product work from the verified baseline
 
 Production mode is currently verified. If continuing product work, keep using production mode for verification unless dev/Turbopack instability is explicitly being investigated. Good next candidates:
-- Polish review/attention UX based on real usage
+- Polish detail/report/review UX based on real usage
 - Improve AI extraction quality and payment-proof extraction if needed
 - Or whatever the next priority is
 
@@ -85,8 +91,14 @@ Latest production-mode audit passed these checks:
 - [x] Dashboard Needs Attention queue implemented
 - [x] Possible duplicate detection implemented using simple rules
 - [x] Payment mismatch, missing proof, low AI confidence, unpaid, and partially paid indicators implemented
+- [x] Monthly reports and CSV exports implemented
+- [x] Expense Detail Drawer implemented
+- [x] Detail drawer shows full expense/payment/document fields
+- [x] Detail drawer reuses primary document and payment proof preview
+- [x] Detail drawer shows AI extraction summary and review issues
+- [x] Detail drawer exposes edit, mark-paid, and delete actions
 
-Not part of the earlier production audit pass: add/edit/delete manual expense, AI extraction, salary page, and invalid sign-in. Phase 3D and Phase 3E have since been implemented and tested.
+Not part of the earlier production audit pass: add/edit/delete manual expense, AI extraction, salary page, and invalid sign-in. Phase 3D, Phase 3E, Phase 4A, and Phase 4B have since been implemented and tested.
 
 ---
 
@@ -132,6 +144,9 @@ Capture the exact error from server stdout/stderr before changing any code. The 
 | `src/lib/supabase/types.ts` | Hand-maintained TypeScript types for Supabase tables |
 | `src/lib/openai/extract.ts` | OpenAI GPT-4o receipt extraction logic |
 | `src/lib/review-issues.ts` | Derived review/attention issue logic and duplicate detection rules |
+| `src/lib/reports-data.ts` | Derived monthly report data, summaries, and CSV source rows |
+| `src/components/reports/ReportsShell.tsx` | Reports page UI and CSV export buttons |
+| `src/components/expenses/ExpenseDetailDrawer.tsx` | Right-side single-expense detail drawer |
 | `supabase/schema.sql` | Full database schema (for new projects) |
 | `supabase/phase-3c-invoice-payment.sql` | Phase 3C migration for other existing databases; already applied in current Supabase database |
 | `.claude/launch.json` | Claude preview configuration; should run production `npm run start -- -p 3001`, not `npm run dev` |

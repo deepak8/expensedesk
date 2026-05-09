@@ -33,6 +33,8 @@ It is **not** a full accounting platform, payroll system, or GST/tax tool.
 - The Mark Paid modal FormData bug was fixed by capturing `FormData` from `event.currentTarget` at submit time before any awaited upload work.
 - Phase 3D flexible bill/payment capture is implemented: unpaid bill, paid bill + proof, payment proof only, and manual entry.
 - Phase 3E review/attention system is implemented and tested: possible duplicate detection, low AI confidence indicators, unpaid/partially paid invoice attention items, payment amount mismatch warnings, and missing proof warnings.
+- Phase 4A monthly reports and CSV exports are implemented and tested for month-end review.
+- Phase 4B Expense Detail Drawer is implemented and tested, with full details, document previews, AI summary, review issues, and edit/mark-paid/delete actions.
 - Audit test data created during the production-mode audit was cleaned up: the two audit expense rows and four audit receipt/payment-proof storage files were deleted.
 - The major local instability was traced to corrupted/stale `.next` output plus conflicting Claude launch configs. A clean rebuild restored production mode:
 
@@ -70,6 +72,17 @@ npm run start -- -p 3001
 - Filtering by category, payment method, status, payment status, and review/attention issue
 - Attention badges include Needs Review, Possible Duplicate, Unpaid, Partially Paid, Amount Mismatch, Missing Proof, and Low AI Confidence
 - Table includes Date, Vendor, Category, Description, Method, Amount, Docs, Attention, Status, Payment, and Actions
+- Actions include View Details, Edit, Mark Paid when relevant, and Delete
+
+### Expense Detail Drawer (Phase 4B)
+- Right-side drawer component at `src/components/expenses/ExpenseDetailDrawer.tsx`
+- Opens from the Expenses table View Details action
+- Header shows vendor, amount, payment status badge, review/attention badges, and expense date
+- Shows full expense/payment/document fields: description, category, expense type, document type, invoice number, due date, payment method, payment date, paid amount, payment reference, and notes
+- Documents section can open the primary receipt/invoice and payment proof through the existing signed URL preview flow
+- AI extraction section shows stored `ai_confidence`, compact `raw_ai_json` summary, and `fields_needing_review` when present
+- Review issues section uses the existing `src/lib/review-issues.ts` derived issue logic
+- Drawer actions reuse existing flows for Edit Expense, Mark Paid, View primary document, View payment proof, and Delete Expense
 
 ### Expense CRUD
 - Add, edit, and delete expenses via API route handlers
@@ -152,6 +165,15 @@ npm run start -- -p 3001
   - Low AI Confidence
 - Dashboard includes a Needs Attention queue with vendor, amount, date, and issue badge
 - Warnings guide review but do not block saving
+
+### Monthly Reports and CSV Export (Phase 4A)
+- Reports page at `/reports` provides month-end operational summaries from live Supabase data
+- Month selector controls the selected reporting period
+- Monthly summary includes total expenses, paid expenses, unpaid invoices, partially paid invoices, salary total, non-salary total, expense count, attachment count, and needs-attention count
+- Category, vendor, payment status, salary, needs-attention, and unpaid invoice reports are derived from expense rows
+- CSV exports are available for all expenses, category summary, vendor summary, salary report, needs attention report, and unpaid invoices
+- Report data is derived in `src/lib/reports-data.ts`
+- Monthly report API: `GET /api/reports/monthly?month=YYYY-MM`
 
 ---
 
@@ -249,7 +271,7 @@ npm run start -- -p 3001
 | `/expenses` | `src/app/expenses/page.tsx` | Expenses list (client-fetching shell) |
 | `/upload` | `src/app/upload/page.tsx` | Receipt/invoice upload |
 | `/salary` | `src/app/salary/page.tsx` | Salary expenses |
-| `/reports` | `src/app/reports/page.tsx` | Reports (placeholder) |
+| `/reports` | `src/app/reports/page.tsx` | Monthly reports and CSV exports |
 | `/settings` | `src/app/settings/page.tsx` | Settings (placeholder) |
 | `/sign-in` | `src/app/sign-in/page.tsx` | Sign-in page |
 
@@ -260,6 +282,7 @@ npm run start -- -p 3001
 | `/api/expenses` | GET, POST | List and create expenses |
 | `/api/expenses/[id]` | PATCH, DELETE | Update and delete an expense |
 | `/api/expenses/[id]/mark-paid` | PATCH | Mark an invoice as paid |
+| `/api/reports/monthly` | GET | Monthly report data for selected month |
 | `/api/categories` | GET | List categories |
 | `/api/payment-methods` | GET | List payment methods |
 

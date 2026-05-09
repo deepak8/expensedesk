@@ -55,6 +55,8 @@ The build script has been changed to `next build --webpack` to work around this.
 - **Audit test data was cleaned up** after verification: the two audit expense rows and four audit storage files were deleted
 - **Phase 3D flexible capture is implemented and tested** for unpaid bills, paid bills with proof, payment proof only, and manual entry
 - **Phase 3E review/attention system is implemented and tested** for duplicate, payment mismatch, missing proof, low AI confidence, unpaid, and partially paid indicators
+- **Phase 4A monthly reports and CSV exports are implemented and tested** for operational month-end review
+- **Phase 4B Expense Detail Drawer is implemented and tested** with full details, document previews, AI extraction summary, review issues, and edit/mark-paid/delete actions
 
 ### Recommendation
 
@@ -108,6 +110,7 @@ These warnings guide review but do not block saving. During create/save, likely 
 - `raw_ai_json` is intentionally compact — does not contain the full OpenAI API response
 - `ai_confidence` must be between 0 and 1 (`numeric(4,3)`)
 - Low AI confidence is surfaced as a review indicator, but it is not treated as a save-blocking error
+- The Expense Detail Drawer shows a compact stored AI summary; it intentionally does not display a large raw OpenAI response
 
 ---
 
