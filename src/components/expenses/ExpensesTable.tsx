@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
-import { Plus, Filter, Receipt, Pencil, Trash2, Loader2, CheckCircle, FileText } from "lucide-react";
+import { Plus, Filter, Receipt, Pencil, Trash2, Loader2, CheckCircle, FileText, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Header from "@/components/Header";
 import {
@@ -14,6 +14,7 @@ import {
   DialogFooter,
   DialogCloseButton,
 } from "@/components/ui/dialog";
+import ExpenseDetailDrawer from "@/components/expenses/ExpenseDetailDrawer";
 import type { CategoryRow, PaymentMethodRow, ExpenseWithRefs } from "@/lib/supabase/types";
 import {
   deriveReviewIssues,
@@ -166,6 +167,7 @@ export default function ExpensesTable() {
     label?: string;
   } | null>(null);
   const [markPaidTarget, setMarkPaidTarget] = useState<DisplayExpense | null>(null);
+  const [detailTargetId, setDetailTargetId] = useState<string | null>(null);
 
   // ─── Load all data ───────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -203,10 +205,11 @@ export default function ExpensesTable() {
   useEffect(() => { loadData(); }, [loadData]);
 
   // ─── Derived display data ────────────────────────────────────────────────────
+  const duplicateIds = useMemo(() => findDuplicateIds(rawExpenses), [rawExpenses]);
+
   const expenses = useMemo(() => {
-    const duplicateIds = findDuplicateIds(rawExpenses);
     return rawExpenses.map((row) => toDisplay(row, duplicateIds));
-  }, [rawExpenses]);
+  }, [rawExpenses, duplicateIds]);
 
   const categories = useMemo(() => [...new Set(categoryRows.map((c) => c.name))].sort(), [categoryRows]);
   const paymentMethods = useMemo(() => [...new Set(paymentMethodRows.map((m) => m.name))].sort(), [paymentMethodRows]);
@@ -235,6 +238,21 @@ export default function ExpensesTable() {
     paymentFilter !== "All Payments" ||
     reviewFilter !== "All Review";
 
+  const detailTarget = useMemo(
+    () => rawExpenses.find((row) => row.id === detailTargetId),
+    [rawExpenses, detailTargetId]
+  );
+
+  const detailDisplay = useMemo(
+    () => expenses.find((expense) => expense.id === detailTargetId),
+    [expenses, detailTargetId]
+  );
+
+  const detailReviewIssues = useMemo(
+    () => (detailTarget ? deriveReviewIssues(detailTarget, duplicateIds) : []),
+    [detailTarget, duplicateIds]
+  );
+
   // ─── Actions ─────────────────────────────────────────────────────────────────
   function openCreate() {
     setEditTarget(undefined);
@@ -244,6 +262,10 @@ export default function ExpensesTable() {
   function openEdit(id: string) {
     setEditTarget(rawExpenses.find((r) => r.id === id));
     setFormOpen(true);
+  }
+
+  function openDetails(id: string) {
+    setDetailTargetId(id);
   }
 
   function confirmDelete(expense: DisplayExpense) {
@@ -387,7 +409,7 @@ export default function ExpensesTable() {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Attention</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Status</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Payment</th>
-                <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground w-20">Actions</th>
+                <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground w-28">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -496,7 +518,14 @@ export default function ExpensesTable() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        onClick={() => openDetails(e.id)}
+                        title="View Details"
+                        className="w-6 h-6 rounded-md flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                      >
+                        <Eye className="w-3 h-3" />
+                      </button>
                       {/* Mark Paid button — only for unpaid/partially paid */}
                       {(e.paymentStatus === "Unpaid" || e.paymentStatus === "Partially Paid") && (
                         <button
@@ -577,6 +606,32 @@ export default function ExpensesTable() {
           onSaved={loadData}
         />
       )}
+
+      <ExpenseDetailDrawer
+        open={!!detailTarget}
+        onOpenChange={(open) => { if (!open) setDetailTargetId(null); }}
+        expense={detailTarget}
+        reviewIssues={detailReviewIssues}
+        onEdit={() => {
+          if (!detailTarget) return;
+          setDetailTargetId(null);
+          openEdit(detailTarget.id);
+        }}
+        onMarkPaid={() => {
+          if (!detailDisplay) return;
+          setDetailTargetId(null);
+          setMarkPaidTarget(detailDisplay);
+        }}
+        onDelete={() => {
+          if (!detailDisplay) return;
+          setDetailTargetId(null);
+          confirmDelete(detailDisplay);
+        }}
+        onViewDocument={(path, label) => {
+          if (!detailTarget) return;
+          setPreviewReceipt({ path, vendor: detailTarget.vendor, label });
+        }}
+      />
 
       {/* Delete confirmation dialog */}
       <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
