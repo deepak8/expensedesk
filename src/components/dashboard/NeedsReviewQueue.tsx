@@ -7,6 +7,7 @@ export interface ReviewItem {
   description: string;
   date: string;
   amount: number;
+  issue?: string;
 }
 
 interface Props {
@@ -19,7 +20,7 @@ export default function NeedsReviewQueue({ items }: Props) {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-amber-500" />
-          <p className="text-sm font-semibold text-foreground">Needs Review</p>
+          <p className="text-sm font-semibold text-foreground">Needs Attention</p>
           <span className="px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-600 text-[11px] font-semibold">
             {items.length}
           </span>
@@ -41,17 +42,22 @@ export default function NeedsReviewQueue({ items }: Props) {
               </div>
               <div className="min-w-0">
                 <p className="text-xs font-medium text-foreground truncate">{e.vendor}</p>
-                <p className="text-[11px] text-muted-foreground truncate">{e.description}</p>
+                <p className="text-[11px] text-muted-foreground truncate">
+                  {e.issue ?? "Needs Review"} · {e.description || "No description"}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-3 flex-shrink-0 ml-3">
+              <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-white border border-amber-200 text-amber-700 font-medium">
+                {e.issue ?? "Review"}
+              </span>
               <span className="text-xs text-muted-foreground">{e.date.slice(5)}</span>
               <span className="text-xs font-semibold text-foreground">
                 ₹{e.amount.toLocaleString("en-IN")}
               </span>
-              <button className="text-[11px] px-2 py-1 rounded-md bg-white border border-border text-foreground hover:bg-muted transition-colors font-medium">
+              <Link href="/expenses" className="text-[11px] px-2 py-1 rounded-md bg-white border border-border text-foreground hover:bg-muted transition-colors font-medium">
                 Review
-              </button>
+              </Link>
             </div>
           </div>
         ))}

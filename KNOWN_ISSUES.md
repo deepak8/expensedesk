@@ -52,6 +52,9 @@ The build script has been changed to `next build --webpack` to work around this.
 - **Dev server remains unreliable** — may crash during navigation or compilation
 - **Production-mode audit passed** for sign-in, dashboard, expenses, upload, unpaid invoice save, mark-paid with payment proof upload, and invoice/payment proof previews
 - **MarkPaidModal FormData bug is fixed** by capturing `FormData` from `event.currentTarget` before awaited upload work
+- **Audit test data was cleaned up** after verification: the two audit expense rows and four audit storage files were deleted
+- **Phase 3D flexible capture is implemented and tested** for unpaid bills, paid bills with proof, payment proof only, and manual entry
+- **Phase 3E review/attention system is implemented and tested** for duplicate, payment mismatch, missing proof, low AI confidence, unpaid, and partially paid indicators
 
 ### Recommendation
 
@@ -85,6 +88,18 @@ For a new or separate existing Supabase database, run the migration before using
 
 ---
 
+## Phase 3E Review / Attention Notes
+
+The review queue is implemented as lightweight derived logic, not as a separate approval or accounting workflow. It uses existing expense fields to flag possible duplicates, unpaid invoices, partially paid invoices, payment amount mismatches, missing proof, and low AI confidence items.
+
+Duplicate detection is intentionally heuristic:
+- Strong duplicate: same vendor and invoice number, or same payment reference
+- Soft duplicate: same vendor, same amount, and expense date within 2 days
+
+These warnings guide review but do not block saving. During create/save, likely duplicates may be saved with `status = needs_review`; existing rows are also evaluated on the Expenses page and Dashboard.
+
+---
+
 ## AI Extraction Limitations
 
 - GPT-4o extraction is best-effort — low-quality images, faded receipts, unusual formats, or non-English receipts may produce incorrect or missing fields
@@ -92,6 +107,7 @@ For a new or separate existing Supabase database, run the migration before using
 - User review before saving is mandatory and intentional
 - `raw_ai_json` is intentionally compact — does not contain the full OpenAI API response
 - `ai_confidence` must be between 0 and 1 (`numeric(4,3)`)
+- Low AI confidence is surfaced as a review indicator, but it is not treated as a save-blocking error
 
 ---
 
@@ -109,6 +125,8 @@ If an expense is deleted or its receipt is replaced, the old file in Supabase St
 | Put `OPENAI_API_KEY` in a `NEXT_PUBLIC_` variable | Exposes the key in the browser bundle. |
 | Use the Supabase service role key in client code or API routes | Bypasses RLS entirely. |
 | Auto-save AI extraction without user review | AI extraction is imperfect. Silent auto-save would create incorrect records. |
+| Turn the review queue into approvals, reviewer assignment, or comment history without planning | Phase 3E is intentionally a lightweight attention system, not an approval workflow. |
+| Add a `review_issues` table for the current Phase 3E flags | Review issues are derived from existing expense fields unless future requirements justify persistence. |
 | Remove `--webpack` from the build script | Turbopack build skips client-reference-manifest files, causing runtime InvariantErrors. |
 | Change the parent `.claude/launch.json` back to `npm run dev` on port 3001 | It can confuse dev/Turbopack and production-mode testing on the same port. |
 | Expand into payroll, GST, or accounting workflows without planning | These require significant data model changes that would conflict with the current schema. |

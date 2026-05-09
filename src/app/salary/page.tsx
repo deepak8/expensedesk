@@ -6,6 +6,8 @@ import {
 import SalaryShell from "@/components/salary/SalaryShell";
 import type { ExpenseWithRefs, PaymentMethodRow } from "@/lib/supabase/types";
 
+export const dynamic = "force-dynamic";
+
 export default async function SalaryPage() {
   let salaryRows: ExpenseWithRefs[] = [];
   let paymentMethodRows: PaymentMethodRow[] = [];

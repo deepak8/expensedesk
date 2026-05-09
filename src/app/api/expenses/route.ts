@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { ExpenseType, ExpenseStatus, DocumentType, PaymentStatus } from "@/lib/supabase/types";
+import { areLikelyDuplicates } from "@/lib/review-issues";
+
+export const dynamic = "force-dynamic";
 
 // ─── GET /api/expenses ────────────────────────────────────────────────────────
 
@@ -63,6 +66,36 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = await createClient();
+  let normalizedStatus = (status ?? "draft") as ExpenseStatus;
+
+  const { data: existingRows } = await supabase
+    .from("expenses")
+    .select("id, expense_date, vendor, amount, invoice_number, payment_reference")
+    .or(
+      [
+        `vendor.ilike.${String(vendor).replaceAll(",", "\\,")}`,
+        invoice_number ? `invoice_number.eq.${String(invoice_number).replaceAll(",", "\\,")}` : "",
+        payment_reference ? `payment_reference.eq.${String(payment_reference).replaceAll(",", "\\,")}` : "",
+      ]
+        .filter(Boolean)
+        .join(",")
+    );
+
+  const duplicateFound = (existingRows ?? []).some((row) =>
+    areLikelyDuplicates(
+      {
+        id: "__new__",
+        expense_date,
+        vendor,
+        amount: Number(amount),
+        invoice_number,
+        payment_reference,
+      },
+      row
+    )
+  );
+
+  if (duplicateFound) normalizedStatus = "needs_review";
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
@@ -74,7 +107,7 @@ export async function POST(req: NextRequest) {
       category_id: category_id ? Number(category_id) : null,
       payment_method_id: payment_method_id ? Number(payment_method_id) : null,
       expense_type: (expense_type ?? "manual") as ExpenseType,
-      status: (status ?? "draft") as ExpenseStatus,
+      status: normalizedStatus,
       description: description ?? null,
       invoice_number: invoice_number ?? null,
       notes: notes ?? null,

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { ExpenseType, ExpenseStatus, DocumentType, PaymentStatus } from "@/lib/supabase/types";
 
+export const dynamic = "force-dynamic";
+
 // ─── PATCH /api/expenses/[id] ─────────────────────────────────────────────────
 
 export async function PATCH(

@@ -137,7 +137,7 @@ npm run start -- -p 3001
 
 Production mode uses `next start`, which serves the pre-built output without Turbopack. The server is stable and does not suffer from the SST cache corruption issues seen in dev mode.
 
-Latest audit result: production mode passed sign-in, dashboard, expenses, upload page, unpaid invoice save, unpaid invoice listing, mark-paid with payment proof upload, payment proof preview, and original invoice/receipt preview.
+Latest audit result: production mode passed sign-in, dashboard, expenses, upload page, unpaid invoice save, unpaid invoice listing, mark-paid with payment proof upload, payment proof preview, and original invoice/receipt preview. Phase 3D flexible capture and Phase 3E review/attention features have also been implemented and tested. The audit test data from the earlier production-mode pass was cleaned up afterward.
 
 ---
 
@@ -189,6 +189,12 @@ If production output looks inconsistent, confirm no process is running `next dev
 - `ExpenseFormModal`, `ReceiptPreviewModal`, and `MarkPaidModal` are dynamically imported with `ssr: false`
 - This avoids including heavy modal code in the initial page bundle
 
+### Review / Attention Derivation
+- Review issues are derived in code using `src/lib/review-issues.ts`; no review table is used.
+- Possible duplicates are detected by vendor + invoice number, payment reference, or vendor + amount + date within 2 days.
+- Attention badges and dashboard review queue use existing fields: `status`, `ai_confidence`, `payment_status`, `paid_amount`, `amount`, `payment_proof_file_path`, `invoice_number`, and `payment_reference`.
+- Duplicate detection should warn or mark `needs_review`; it should not block saves.
+
 ### Instrumentation
 - `src/instrumentation.ts` absorbs transient ETIMEDOUT/ECONNRESET socket errors from the Supabase client
 - These errors are Supabase free-tier cold-start artifacts, not application bugs
@@ -201,17 +207,24 @@ If production output looks inconsistent, confirm no process is running `next dev
 - [ ] Sign in with invalid credentials -> error message shown
 - [ ] Unauthenticated visit to `/expenses` -> redirected to `/sign-in`
 - [ ] Dashboard loads with live chart data
+- [ ] Dashboard Needs Attention queue shows unpaid/partial/duplicate/low-confidence/mismatch/missing-proof items where present
 - [ ] Expenses page loads with expense rows
+- [ ] Expenses Attention badges render compactly
+- [ ] Expenses Review filter works for possible duplicate, missing proof, amount mismatch, and low AI confidence
 - [ ] Add expense -> appears in list
+- [ ] Likely duplicate create/save marks the new record for review without blocking save
 - [ ] Edit expense -> changes reflected
 - [ ] Delete expense -> removed from list
 - [ ] Upload a receipt image -> preview, save, visible in Expenses
 - [ ] Upload a receipt PDF -> preview, save, visible in Expenses
 - [ ] Click receipt icon in Expenses -> preview modal opens
 - [ ] Extract receipt with AI -> form prefilled
-- [ ] Upload as invoice -> saved as unpaid
-- [ ] Upload as receipt/payment proof -> saved as paid
+- [ ] Unpaid Bill / Invoice mode saves as unpaid
+- [ ] Paid Bill + Payment Proof mode saves bill and separate proof
+- [ ] Payment Proof Only mode saves as paid
+- [ ] Manual Entry mode saves paid and unpaid entries without a file
 - [ ] Mark unpaid invoice as paid -> payment status updated
+- [ ] Mark Paid can upload proof and still works with manual fallback
 - [ ] Payment status badges show in Expenses table
 - [ ] Salary page loads with salary-type expenses
 - [ ] `npx tsc --noEmit` passes

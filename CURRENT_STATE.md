@@ -2,7 +2,7 @@
 
 ## Product Summary
 
-ExpenseDesk is a small-business expense management web app. It helps businesses capture receipts and invoices, review AI-extracted expense details, manually add business expenses, track salary payments, manage invoice payment status, and review month-on-month spending.
+ExpenseDesk is a small-business expense management web app. It helps businesses capture bills, invoices, receipts, payment proofs, manual expenses, salary expenses, review AI-extracted details, manage invoice payment status, identify items needing attention, and review month-on-month spending.
 
 It is **not** a full accounting platform, payroll system, or GST/tax tool.
 
@@ -31,6 +31,9 @@ It is **not** a full accounting platform, payroll system, or GST/tax tool.
 - Core Phase 3C flows were verified in production mode: sign in, dashboard, expenses, upload page, save unpaid invoice, unpaid invoice appears in Expenses, mark invoice paid, upload/view payment proof, and view original invoice/receipt preview.
 - Phase 3C migration is applied in the current Supabase database. The Phase 3C columns can be inserted, selected, and updated successfully.
 - The Mark Paid modal FormData bug was fixed by capturing `FormData` from `event.currentTarget` at submit time before any awaited upload work.
+- Phase 3D flexible bill/payment capture is implemented: unpaid bill, paid bill + proof, payment proof only, and manual entry.
+- Phase 3E review/attention system is implemented and tested: possible duplicate detection, low AI confidence indicators, unpaid/partially paid invoice attention items, payment amount mismatch warnings, and missing proof warnings.
+- Audit test data created during the production-mode audit was cleaned up: the two audit expense rows and four audit receipt/payment-proof storage files were deleted.
 - The major local instability was traced to corrupted/stale `.next` output plus conflicting Claude launch configs. A clean rebuild restored production mode:
 
 ```bash
@@ -57,19 +60,22 @@ npm run start -- -p 3001
 ### Dashboard
 - Server component at `src/app/page.tsx`
 - Reads live expense data from Supabase for the current month
-- Derives summary cards, category split, payment method split, top vendors, and needs-review list
-- Falls back to mock data if Supabase fetch fails
+- Derives summary cards, category split, payment method split, top vendors, and a Needs Attention review queue
+- Needs Attention includes unpaid invoices, partially paid invoices, possible duplicates, low AI confidence items, amount mismatches, and missing proof items
+- Falls back to mock data only when Supabase is intentionally not configured
 
 ### Expenses List
 - Client component at `src/components/expenses/ExpensesTable.tsx`
 - Self-fetching: loads expenses, categories, and payment methods via `fetch` to API routes
-- Filtering by category, payment method, status, expense type, and payment status
-- 10-column table: Date, Vendor, Description, Amount, Category, Payment, Docs, Payment Status, Status, Actions
+- Filtering by category, payment method, status, payment status, and review/attention issue
+- Attention badges include Needs Review, Possible Duplicate, Unpaid, Partially Paid, Amount Mismatch, Missing Proof, and Low AI Confidence
+- Table includes Date, Vendor, Category, Description, Method, Amount, Docs, Attention, Status, Payment, and Actions
 
 ### Expense CRUD
 - Add, edit, and delete expenses via API route handlers
 - `ExpenseFormModal` handles add/edit with all fields including Phase 3C fields
 - All CRUD is via `fetch` to API routes (no server actions for expenses)
+- New create/save paths mark likely duplicates as `needs_review` without blocking save
 
 ### Salary Expenses
 - Stored as expenses with `expense_type = 'salary'`
@@ -80,7 +86,8 @@ npm run start -- -p 3001
 - Upload flow: file picker with drag-and-drop, client-side preview, server-side upload
 - File path convention: `{userId}/{yyyy-mm}/{timestamp}-{safe-filename}`
 - `receipt_file_path` column stores the private bucket path (not a public URL)
-- Upload page includes document type selection (Invoice/Bill vs Receipt/Payment Proof)
+- Upload page supports four capture modes: Unpaid Bill / Invoice, Paid Bill + Payment Proof, Payment Proof Only, and Manual Entry
+- `payment_proof_file_path` stores a separate payment proof only when both a bill and proof exist or proof is uploaded later during Mark Paid
 
 ### Receipt/Invoice Preview
 - Signed URLs generated server-side for preview
@@ -96,25 +103,55 @@ npm run start -- -p 3001
 - `raw_ai_json` stored compactly on the expense row (JSONB)
 - `ai_confidence` stored as `numeric(4,3)` (value between 0 and 1)
 
-### Invoice vs Payment Proof Workflow (Phase 3C)
-- Upload page shows document type selector after file upload: "Invoice / Bill" vs "Receipt / Payment Proof"
-- Invoice uploads:
+### Flexible Bill / Payment Capture (Phase 3D)
+- Upload page shows a capture mode selector:
+  - Unpaid Bill / Invoice
+  - Paid Bill + Payment Proof
+  - Payment Proof Only
+  - Manual Entry
+- Unpaid bill uploads:
   - `document_type = 'invoice'`, `expense_type = 'invoice'`
   - `payment_status = 'unpaid'`
-  - Shows orange "This invoice will be saved as unpaid" banner
-  - Due Date field shown, Payment Method hidden
-  - Save button reads "Save as Unpaid Invoice"
-- Receipt/payment proof uploads:
-  - `document_type = 'receipt'` or `'payment_proof'`
+  - `receipt_file_path` stores the bill/invoice
+  - payment fields remain empty until Mark Paid
+- Paid bill + proof uploads:
+  - `document_type = 'invoice'`, `expense_type = 'invoice'`
+  - `receipt_file_path` stores the bill/invoice
+  - `payment_proof_file_path` stores the separate proof
+  - `payment_status` is derived from paid amount vs bill amount
+- Payment proof only uploads:
+  - `document_type = 'payment_proof'`, `expense_type = 'receipt'`
   - `payment_status = 'paid'`
-  - `payment_date` and `paid_amount` auto-derived from expense date and amount
+  - `receipt_file_path` stores the receipt/proof
+- Manual entry:
+  - no file required
+  - `document_type = 'manual'`
+  - supports unpaid, paid, and partially paid entries
 - Mark Paid modal (`MarkPaidModal.tsx`):
   - Triggered from "Mark Paid" button in Expenses table for unpaid/partially_paid expenses
   - Fields: Payment Date, Paid Amount, Payment Method, Payment Reference, Payment Proof upload, Notes
+  - Supports optional AI extraction from uploaded payment proof and manual fallback
+  - Shows a warning when paid amount differs from invoice amount
   - Calls `PATCH /api/expenses/[id]/mark-paid`
   - Auto-determines `paid` vs `partially_paid` based on paid_amount vs expense amount
 - Payment status column in Expenses table with colored badges (green/orange/amber)
 - Docs column shows invoice icon (FileText) vs receipt icon based on document_type
+
+### Review Queue / Attention System (Phase 3E)
+- Review issues are derived in code from existing expense fields; no review table was added
+- Duplicate detection rules:
+  - strong duplicate: same vendor + invoice number, or same payment reference
+  - soft duplicate: same vendor + same amount + expense date within 2 days
+- Expenses page shows compact attention badges for:
+  - Needs Review
+  - Possible Duplicate
+  - Unpaid
+  - Partially Paid
+  - Amount Mismatch
+  - Missing Proof
+  - Low AI Confidence
+- Dashboard includes a Needs Attention queue with vendor, amount, date, and issue badge
+- Warnings guide review but do not block saving
 
 ---
 
@@ -191,16 +228,15 @@ npm run start -- -p 3001
 
 ## Current Upload/Storage Workflow
 
-1. User selects a receipt/invoice file (image or PDF) in the upload UI
-2. File is previewed client-side before upload
-3. File is uploaded to the private `receipts` bucket via server action
-4. After upload, user selects document type: Invoice/Bill or Receipt/Payment Proof
-5. Form fields adapt based on document type selection
-6. User can optionally run AI extraction to prefill form fields
-7. User reviews and saves the expense
-8. File path stored in `expenses.receipt_file_path`
-9. On preview from Expenses table, a signed URL is generated server-side
-10. `ReceiptPreviewModal` renders the signed URL inline (image or PDF iframe)
+1. User chooses a capture mode in the upload UI
+2. Depending on mode, user uploads one primary file, two files, or no file for manual entry
+3. Uploaded files are previewed client-side and stored in the private `receipts` bucket
+4. User can optionally run AI extraction to prefill fields
+5. User reviews and saves the expense; AI never auto-saves
+6. Primary document path is stored in `expenses.receipt_file_path`
+7. Separate payment proof path is stored in `expenses.payment_proof_file_path` when relevant
+8. On preview from Expenses table, signed URLs are generated server-side
+9. `ReceiptPreviewModal` renders images inline and PDFs via iframe
 
 ---
 

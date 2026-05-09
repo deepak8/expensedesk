@@ -60,3 +60,15 @@ Thumbs.db
 
 # ─── Deployment ───────────────────────────────────────────────────────────────
 .vercel
+
+# Next.js build/cache output
+.next/
+.next.corrupt-*/
+out/
+
+# Local env
+.env.local
+.env*.local
+
+# Dependencies
+node_modules/

@@ -2,16 +2,19 @@
 
 ## Project Summary
 
-ExpenseDesk is a small-business expense management app built with Next.js 16.2.6 (App Router), Supabase (auth, database, storage), and OpenAI (receipt extraction). The app supports receipt/invoice upload, AI-powered data extraction with mandatory user review, expense CRUD, salary tracking, and an invoice vs payment proof workflow.
+ExpenseDesk is a small-business expense management app built with Next.js 16.2.6 (App Router), Supabase (auth, database, storage), and OpenAI (receipt extraction). The app supports bill/invoice capture, receipt/payment proof upload, AI-powered data extraction with mandatory user review, expense CRUD, salary tracking, invoice payment status, flexible bill/payment capture, and a lightweight review/attention queue.
 
 ## Current Status
 
-- **All application code is written** through Phase 3C (invoice/payment workflow)
+- **All application code is written** through Phase 3E (review queue + duplicate/suspicious expense detection)
 - **TypeScript compiles cleanly** (`npx tsc --noEmit` passes)
 - **Production build passes** (`npm run build` with `--webpack` flag)
 - **Production-mode audit passed** for the core Phase 3C flows
 - **Phase 3C database migration is applied** in the current Supabase database
+- **Phase 3D flexible bill/payment capture is implemented and tested**
+- **Phase 3E review/attention system is implemented and tested**
 - **MarkPaidModal FormData bug is fixed**
+- **Audit test data has been cleaned up** from the current Supabase database and `receipts` bucket
 - **Dev server (Turbopack) has been unreliable** — repeated crashes with manifest/cache errors that are not caused by application code
 
 ## What Happened
@@ -30,7 +33,9 @@ npm run start -- -p 3001
 
 Both Claude launch configs should run production start on port 3001. The parent config must not run `npm run dev` on that same port.
 
-The audit also verified that Phase 3C migration is applied in the current Supabase database and that production-mode flows work. The Mark Paid modal bug was fixed by capturing `FormData` from `event.currentTarget` before awaited payment-proof upload work.
+The audit also verified that Phase 3C migration is applied in the current Supabase database and that production-mode flows work. Phase 3D added flexible capture modes: Unpaid Bill / Invoice, Paid Bill + Payment Proof, Payment Proof Only, and Manual Entry. The Mark Paid modal bug was fixed by capturing `FormData` from `event.currentTarget` before awaited payment-proof upload work, and it now supports optional payment-proof extraction/manual fallback.
+
+Phase 3E added a lightweight review/attention system. Review issues are derived in code using existing fields, not a new table. It supports possible duplicate detection, unpaid/partially paid invoice attention items, amount mismatch warnings, missing proof warnings, low AI confidence indicators, Expenses review filters, and a Dashboard Needs Attention queue. The audit test expense rows and storage files were cleaned up afterward.
 
 ---
 
@@ -52,7 +57,8 @@ Open http://localhost:3001 and confirm the server starts without errors. This is
 ### Step 2: Continue product work from the verified baseline
 
 Production mode is currently verified. If continuing product work, keep using production mode for verification unless dev/Turbopack instability is explicitly being investigated. Good next candidates:
-- Phase 3B (AI review quality, duplicate detection)
+- Polish review/attention UX based on real usage
+- Improve AI extraction quality and payment-proof extraction if needed
 - Or whatever the next priority is
 
 ---
@@ -74,8 +80,13 @@ Latest production-mode audit passed these checks:
 - [x] Upload payment proof during mark-paid
 - [x] View original invoice/receipt preview
 - [x] View payment proof preview
+- [x] Flexible capture modes implemented: unpaid bill, paid bill + proof, payment proof only, manual entry
+- [x] Review/attention badges implemented on Expenses
+- [x] Dashboard Needs Attention queue implemented
+- [x] Possible duplicate detection implemented using simple rules
+- [x] Payment mismatch, missing proof, low AI confidence, unpaid, and partially paid indicators implemented
 
-Not part of the latest audit pass: add/edit/delete manual expense, AI extraction, salary page, and invalid sign-in.
+Not part of the earlier production audit pass: add/edit/delete manual expense, AI extraction, salary page, and invalid sign-in. Phase 3D and Phase 3E have since been implemented and tested.
 
 ---
 
@@ -120,6 +131,7 @@ Capture the exact error from server stdout/stderr before changing any code. The 
 | `src/lib/supabase/server.ts` | Server-side Supabase client with cookie auth |
 | `src/lib/supabase/types.ts` | Hand-maintained TypeScript types for Supabase tables |
 | `src/lib/openai/extract.ts` | OpenAI GPT-4o receipt extraction logic |
+| `src/lib/review-issues.ts` | Derived review/attention issue logic and duplicate detection rules |
 | `supabase/schema.sql` | Full database schema (for new projects) |
 | `supabase/phase-3c-invoice-payment.sql` | Phase 3C migration for other existing databases; already applied in current Supabase database |
 | `.claude/launch.json` | Claude preview configuration; should run production `npm run start -- -p 3001`, not `npm run dev` |

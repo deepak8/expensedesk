@@ -5,6 +5,7 @@ import type { ChartSlice } from "@/components/dashboard/CategorySplitChart";
 import type { VendorRow } from "@/components/dashboard/TopVendors";
 import type { ReviewItem } from "@/components/dashboard/NeedsReviewQueue";
 import type { MonthlyData } from "@/lib/mock-data";
+import { deriveReviewIssues, findDuplicateIds } from "@/lib/review-issues";
 
 export interface FlatExpense {
   id: string;
@@ -16,6 +17,14 @@ export interface FlatExpense {
   payment_method_name: string | null;
   expense_type: string;
   status: string;
+  document_type?: string | null;
+  payment_status?: string | null;
+  receipt_file_path?: string | null;
+  invoice_number?: string | null;
+  ai_confidence?: number | null;
+  paid_amount?: number | null;
+  payment_reference?: string | null;
+  payment_proof_file_path?: string | null;
 }
 
 export interface DashboardData {
@@ -47,10 +56,14 @@ export function deriveDashboardData(expenses: FlatExpense[]): DashboardData {
     .filter((e) => e.expense_type === "salary")
     .reduce((s, e) => s + Number(e.amount), 0);
   const nonSalary = total - salary;
-  const reviewItems = expenses.filter(
-    (e) => e.status === "needs_review" || e.status === "missing_receipt"
-  );
-  const needsReviewTotal = reviewItems.reduce((s, e) => s + Number(e.amount), 0);
+  const duplicateIds = findDuplicateIds(expenses);
+  const reviewItems = expenses
+    .map((expense) => ({
+      expense,
+      issues: deriveReviewIssues(expense, duplicateIds),
+    }))
+    .filter(({ issues }) => issues.length > 0);
+  const needsReviewTotal = reviewItems.reduce((s, { expense }) => s + Number(expense.amount), 0);
 
   // Category split
   const catMap = new Map<string, number>();
@@ -95,12 +108,13 @@ export function deriveDashboardData(expenses: FlatExpense[]): DashboardData {
     .map(([vendor, { amount, category }]) => ({ vendor, category, amount }));
 
   // Needs review queue
-  const needsReview: ReviewItem[] = reviewItems.slice(0, 6).map((e) => ({
-    id: e.id,
-    vendor: e.vendor,
-    description: e.description ?? "",
-    date: e.expense_date,
-    amount: Number(e.amount),
+  const needsReview: ReviewItem[] = reviewItems.slice(0, 6).map(({ expense, issues }) => ({
+    id: expense.id,
+    vendor: expense.vendor,
+    description: expense.description ?? "",
+    date: expense.expense_date,
+    amount: Number(expense.amount),
+    issue: issues[0].label,
   }));
 
   return {

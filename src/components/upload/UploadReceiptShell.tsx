@@ -33,7 +33,8 @@ import type { ExtractionResult } from "@/lib/openai/extract";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Phase = "idle" | "uploading" | "ready" | "extracting" | "saving" | "saved";
-type DocTypeChoice = "invoice" | "receipt" | null;
+type CaptureMode = "unpaid_bill" | "paid_bill_proof" | "payment_proof_only" | "manual";
+type UploadSlot = "primary" | "paymentProof";
 
 interface UploadedFile {
   file: File;
@@ -54,6 +55,9 @@ interface FormFields {
   notes: string;
   currency: string;
   due_date: string;
+  payment_status: "unpaid" | "partially_paid" | "paid";
+  payment_date: string;
+  paid_amount: string;
   payment_reference: string;
 }
 
@@ -71,6 +75,33 @@ const STATUSES = [
 ];
 
 const CONFIDENCE_THRESHOLD = 0.85;
+
+const CAPTURE_MODES: Array<{
+  value: CaptureMode;
+  title: string;
+  label: string;
+}> = [
+  {
+    value: "unpaid_bill",
+    title: "Unpaid Bill / Invoice",
+    label: "I have a bill, but payment is not done yet.",
+  },
+  {
+    value: "paid_bill_proof",
+    title: "Paid Bill + Payment Proof",
+    label: "I have the bill and the payment proof now.",
+  },
+  {
+    value: "payment_proof_only",
+    title: "Payment Proof Only",
+    label: "I only have proof of payment or a receipt.",
+  },
+  {
+    value: "manual",
+    title: "Manual Entry",
+    label: "No file right now; I'll enter details manually.",
+  },
+];
 
 const inputCls =
   "w-full h-9 px-3 text-sm rounded-lg border border-border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors disabled:opacity-60";
@@ -119,14 +150,16 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
   const today = new Date().toISOString().split("T")[0];
 
   // ── Phase & file state ────────────────────────────────────────────────────
-  const [phase, setPhase] = useState<Phase>("idle");
+  const [phase, setPhase] = useState<Phase>("ready");
   const [dragging, setDragging] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [uploaded, setUploaded] = useState<UploadedFile | null>(null);
+  const [paymentProof, setPaymentProof] = useState<UploadedFile | null>(null);
+  const [uploadingSlot, setUploadingSlot] = useState<UploadSlot | null>(null);
 
-  // ── Document type choice ─────────────────────────────────────────────────
-  const [docType, setDocType] = useState<DocTypeChoice>(null);
+  // ── Capture mode choice ──────────────────────────────────────────────────
+  const [captureMode, setCaptureMode] = useState<CaptureMode>("unpaid_bill");
 
   // ── AI state ──────────────────────────────────────────────────────────────
   const [aiData, setAiData] = useState<ExtractionResult | null>(null);
@@ -145,6 +178,9 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
     notes: "",
     currency: "INR",
     due_date: "",
+    payment_status: "unpaid",
+    payment_date: today,
+    paid_amount: "",
     payment_reference: "",
   };
 
@@ -170,12 +206,13 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
 
   // ── File processing ───────────────────────────────────────────────────────
 
-  async function processFile(file: File) {
+  async function processFile(file: File, slot: UploadSlot = "primary") {
     setUploadError(null);
     setSaveError(null);
-    setAiData(null);
-    setAiError(null);
-    setDocType(null);
+    if (slot === "primary") {
+      setAiData(null);
+      setAiError(null);
+    }
 
     const validationError = validateReceiptFile(file);
     if (validationError) {
@@ -184,6 +221,7 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
     }
 
     setPhase("uploading");
+    setUploadingSlot(slot);
 
     const supabase = createClient();
     const {
@@ -192,6 +230,7 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
     if (!user) {
       setUploadError("You must be signed in to upload receipts.");
       setPhase("idle");
+      setUploadingSlot(null);
       return;
     }
 
@@ -199,6 +238,7 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
     if (uploadResult.error || !uploadResult.path) {
       setUploadError(uploadResult.error ?? "Upload failed.");
       setPhase("idle");
+      setUploadingSlot(null);
       return;
     }
 
@@ -207,14 +247,20 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
       console.warn("[UploadReceiptShell] Could not get signed URL:", urlResult.error);
     }
 
-    setUploaded({
+    const nextUpload = {
       file,
       path: uploadResult.path,
       signedUrl: urlResult.signedUrl ?? "",
       isImage: file.type.startsWith("image/"),
-    });
+    };
 
-    setFields({ ...blankFields });
+    if (slot === "primary") {
+      setUploaded(nextUpload);
+      setFields((prev) => ({ ...blankFields, payment_status: prev.payment_status }));
+    } else {
+      setPaymentProof(nextUpload);
+    }
+    setUploadingSlot(null);
     setPhase("ready");
   }
 
@@ -224,13 +270,13 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
     e.preventDefault();
     setDragging(false);
     const file = e.dataTransfer.files[0];
-    if (file) processFile(file);
+    if (file) processFile(file, "primary");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>, slot: UploadSlot = "primary") => {
     const file = e.target.files?.[0];
-    if (file) processFile(file);
+    if (file) processFile(file, slot);
     e.target.value = "";
   };
 
@@ -264,6 +310,9 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
       (m) => m.name.toLowerCase() === ai.payment_method_guess?.toLowerCase()
     );
 
+    const matchedPaidAmount = ai.amount !== null ? String(ai.amount) : "";
+    const extractedDate = ai.expense_date ?? today;
+
     setFields({
       expense_date: ai.expense_date ?? today,
       vendor: ai.vendor ?? "",
@@ -276,7 +325,11 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
       notes: "",
       currency: ai.currency ?? "INR",
       due_date: ai.due_date ?? "",
-      payment_reference: "",
+      payment_status:
+        captureMode === "unpaid_bill" ? "unpaid" : captureMode === "manual" ? fields.payment_status : "paid",
+      payment_date: captureMode === "unpaid_bill" ? "" : extractedDate,
+      paid_amount: captureMode === "unpaid_bill" ? "" : matchedPaidAmount,
+      payment_reference: ai.invoice_number ?? "",
     });
 
     setPhase("ready");
@@ -286,7 +339,15 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!uploaded) return;
+
+    if (captureMode !== "manual" && !uploaded) {
+      setSaveError("Upload the required document before saving.");
+      return;
+    }
+    if (captureMode === "paid_bill_proof" && !paymentProof) {
+      setSaveError("Upload payment proof before saving this paid bill.");
+      return;
+    }
 
     setSaveError(null);
     setPhase("saving");
@@ -309,24 +370,46 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
     if (uploaded?.path) {
       deleteReceiptFile(uploaded.path).catch(() => {});
     }
+    if (paymentProof?.path) {
+      deleteReceiptFile(paymentProof.path).catch(() => {});
+    }
     setUploaded(null);
+    setPaymentProof(null);
     setUploadError(null);
     setSaveError(null);
     setAiData(null);
     setAiError(null);
-    setDocType(null);
-    setPhase("idle");
+    setUploadingSlot(null);
+    setPhase("ready");
     setFields({ ...blankFields });
   }
 
   function resetForAnother() {
     setUploaded(null);
+    setPaymentProof(null);
     setAiData(null);
     setAiError(null);
     setSaveError(null);
-    setDocType(null);
-    setPhase("idle");
+    setUploadingSlot(null);
+    setPhase("ready");
     setFields({ ...blankFields });
+  }
+
+  function handleModeChange(mode: CaptureMode) {
+    setCaptureMode(mode);
+    setSaveError(null);
+    setUploadError(null);
+    setAiError(null);
+    setAiData(null);
+    const nextStatus =
+      mode === "unpaid_bill" ? "unpaid" : mode === "manual" ? fields.payment_status : "paid";
+    setFields((prev) => ({
+      ...prev,
+      payment_status: nextStatus,
+      payment_date: nextStatus === "unpaid" ? "" : prev.payment_date || today,
+      paid_amount: nextStatus === "unpaid" ? "" : prev.paid_amount || prev.amount,
+    }));
+    setPhase("ready");
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -334,13 +417,37 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
   // ─────────────────────────────────────────────────────────────────────────
 
   const isFormDisabled = phase === "saving" || phase === "extracting";
-  const isInvoice = docType === "invoice";
-  const isReceipt = docType === "receipt";
+  const isUnpaidBill = captureMode === "unpaid_bill";
+  const isPaidBillWithProof = captureMode === "paid_bill_proof";
+  const isPaymentProofOnly = captureMode === "payment_proof_only";
+  const isManual = captureMode === "manual";
+  const selectedMode = CAPTURE_MODES.find((m) => m.value === captureMode)!;
+  const amountNum = Number(fields.amount || 0);
+  const paidAmountNum = Number(fields.paid_amount || 0);
+  const computedPaymentStatus =
+    isUnpaidBill || fields.payment_status === "unpaid"
+      ? "unpaid"
+      : paidAmountNum > 0 && amountNum > 0 && paidAmountNum < amountNum
+      ? "partially_paid"
+      : fields.payment_status === "partially_paid"
+      ? "partially_paid"
+      : "paid";
+  const documentType = isManual ? "manual" : isPaymentProofOnly ? "payment_proof" : "invoice";
+  const expenseType =
+    isManual && computedPaymentStatus === "unpaid"
+      ? "invoice"
+      : isManual
+      ? "manual"
+      : isPaymentProofOnly
+      ? "receipt"
+      : "invoice";
 
-  const savedLabel = isInvoice ? "Invoice saved as unpaid" : "Expense saved";
-  const savedSubLabel = isInvoice
-    ? "You can mark this invoice as paid later from the Expenses page."
-    : "Your receipt expense has been added successfully.";
+  const savedLabel =
+    computedPaymentStatus === "unpaid" ? "Expense saved as unpaid" : "Expense saved";
+  const savedSubLabel =
+    computedPaymentStatus === "unpaid"
+      ? "You can mark it as paid later from the Expenses page."
+      : "Your expense has been added successfully.";
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -380,43 +487,69 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
           <div className="grid grid-cols-5 gap-5 h-full">
             {/* Left: Upload Zone + Preview */}
             <div className="col-span-2 flex flex-col gap-4">
-              {/* Upload Zone */}
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  if (phase === "idle") setDragging(true);
-                }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={handleDrop}
-                className={cn(
-                  "flex flex-col items-center justify-center rounded-xl border-2 border-dashed transition-all min-h-[200px] p-6 text-center",
-                  phase === "idle"
-                    ? dragging
-                      ? "border-primary bg-accent scale-[1.01] cursor-copy"
-                      : "border-border bg-white hover:border-primary/50 hover:bg-accent/30 cursor-pointer"
-                    : phase === "uploading"
-                    ? "border-primary/40 bg-primary/5 cursor-default"
-                    : "border-green-300 bg-green-50/50 cursor-default"
-                )}
-                onClick={() => {
-                  if (phase === "idle") document.getElementById("file-input")?.click();
-                }}
-              >
-                <input
-                  id="file-input"
-                  type="file"
-                  accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
-                  className="hidden"
-                  onChange={handleFileInput}
-                />
+              <div className="bg-white rounded-xl border border-border shadow-sm p-3">
+                <p className="text-xs font-semibold text-foreground mb-2">Capture mode</p>
+                <div className="grid grid-cols-1 gap-2">
+                  {CAPTURE_MODES.map((mode) => (
+                    <button
+                      key={mode.value}
+                      type="button"
+                      onClick={() => handleModeChange(mode.value)}
+                      disabled={isFormDisabled}
+                      className={cn(
+                        "text-left p-3 rounded-lg border transition-colors",
+                        captureMode === mode.value
+                          ? "border-primary bg-primary/5"
+                          : "border-border bg-white hover:bg-muted/40"
+                      )}
+                    >
+                      <p className="text-xs font-semibold text-foreground">{mode.title}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{mode.label}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-                {phase === "idle" && (
+              {/* Upload Zone */}
+              {!isManual ? (
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (!uploaded && uploadingSlot !== "primary") setDragging(true);
+                  }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={handleDrop}
+                  className={cn(
+                    "flex flex-col items-center justify-center rounded-xl border-2 border-dashed transition-all min-h-[180px] p-6 text-center",
+                    !uploaded && uploadingSlot !== "primary"
+                      ? dragging
+                        ? "border-primary bg-accent scale-[1.01] cursor-copy"
+                        : "border-border bg-white hover:border-primary/50 hover:bg-accent/30 cursor-pointer"
+                      : uploadingSlot === "primary"
+                      ? "border-primary/40 bg-primary/5 cursor-default"
+                      : "border-green-300 bg-green-50/50 cursor-default"
+                  )}
+                  onClick={() => {
+                    if (!uploaded && uploadingSlot !== "primary") {
+                      document.getElementById("file-input")?.click();
+                    }
+                  }}
+                >
+                  <input
+                    id="file-input"
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
+                    className="hidden"
+                    onChange={(e) => handleFileInput(e, "primary")}
+                  />
+
+                  {!uploaded && uploadingSlot !== "primary" && (
                   <>
                     <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
                       <Upload className="w-6 h-6 text-primary" />
                     </div>
                     <p className="text-sm font-semibold text-foreground mb-1">
-                      Drop receipt or invoice here
+                      {isPaymentProofOnly ? "Drop payment proof or receipt here" : "Drop bill or invoice here"}
                     </p>
                     <p className="text-xs text-muted-foreground">or click to browse</p>
                     <p className="text-[11px] text-muted-foreground mt-2">
@@ -429,9 +562,9 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                       </div>
                     )}
                   </>
-                )}
+                  )}
 
-                {phase === "uploading" && (
+                  {uploadingSlot === "primary" && (
                   <>
                     <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
                       <Upload className="w-6 h-6 text-primary" />
@@ -439,12 +572,9 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                     <p className="text-sm font-semibold text-foreground mb-1">Uploading…</p>
                     <p className="text-xs text-muted-foreground">Please wait</p>
                   </>
-                )}
+                  )}
 
-                {(phase === "ready" ||
-                  phase === "extracting" ||
-                  phase === "saving") &&
-                  uploaded && (
+                  {uploaded && uploadingSlot !== "primary" && (
                     <>
                       <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center mb-3">
                         <CheckCircle className="w-6 h-6 text-green-600" />
@@ -468,7 +598,66 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                       </button>
                     </>
                   )}
-              </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-muted/30 min-h-[180px] p-6 text-center">
+                  <div className="w-12 h-12 rounded-xl bg-white border border-border flex items-center justify-center mb-3">
+                    <FileText className="w-6 h-6 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm font-semibold text-foreground mb-1">Manual capture</p>
+                  <p className="text-xs text-muted-foreground max-w-[260px]">
+                    No file is required. Enter the expense details in the review form.
+                  </p>
+                </div>
+              )}
+
+              {isPaidBillWithProof && (
+                <div className="rounded-xl border border-border bg-white p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold text-foreground">Payment proof</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Upload UPI, bank, card, or receipt proof.
+                      </p>
+                    </div>
+                    <label
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-white text-xs font-medium text-foreground hover:bg-muted transition-colors cursor-pointer",
+                        isFormDisabled ? "opacity-60 pointer-events-none" : ""
+                      )}
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      {paymentProof ? "Replace" : "Choose"}
+                      <input
+                        type="file"
+                        accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
+                        className="hidden"
+                        disabled={isFormDisabled}
+                        onChange={(e) => handleFileInput(e, "paymentProof")}
+                      />
+                    </label>
+                  </div>
+                  {uploadingSlot === "paymentProof" && (
+                    <p className="text-xs text-muted-foreground mt-3">Uploading payment proof…</p>
+                  )}
+                  {paymentProof && (
+                    <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-green-50 border border-green-200 px-3 py-2">
+                      <p className="text-xs text-green-700 truncate">{paymentProof.file.name}</p>
+                      <button
+                        type="button"
+                        disabled={isFormDisabled}
+                        onClick={() => {
+                          deleteReceiptFile(paymentProof.path).catch(() => {});
+                          setPaymentProof(null);
+                        }}
+                        className="text-[11px] text-green-700 hover:underline disabled:opacity-60"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Receipt Preview */}
               <div className="bg-white rounded-xl border border-border shadow-sm p-4 flex flex-col items-center justify-center min-h-[200px] flex-1">
@@ -539,8 +728,7 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                         {uploaded.file.name}
                       </span>
                     )}
-                    {/* Extract with AI button — only shown after doc type is selected */}
-                    {(phase === "ready" || phase === "extracting") && uploaded && docType && (
+                    {(phase === "ready" || phase === "extracting") && uploaded && !isManual && (
                       <button
                         type="button"
                         disabled={phase === "extracting"}
@@ -600,59 +788,16 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                     </div>
                   )}
 
-                  {/* ── Document Type Selector ── */}
-                  {(phase === "ready" || phase === "saving") && !docType && (
-                    <div className="space-y-4">
-                      <div>
-                        <p className="text-sm font-semibold text-foreground mb-1">
-                          What type of document is this?
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Select the document type so we can handle payment status correctly.
-                        </p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setDocType("invoice")}
-                          className="flex flex-col items-center gap-2 p-5 rounded-xl border-2 border-border bg-white hover:border-primary/50 hover:bg-accent/30 transition-all text-center"
-                        >
-                          <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center">
-                            <FileText className="w-5 h-5 text-orange-500" />
-                          </div>
-                          <p className="text-sm font-semibold text-foreground">Invoice / Bill</p>
-                          <p className="text-[11px] text-muted-foreground leading-tight">
-                            A bill or invoice you need to pay. Will be saved as unpaid.
-                          </p>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDocType("receipt")}
-                          className="flex flex-col items-center gap-2 p-5 rounded-xl border-2 border-border bg-white hover:border-primary/50 hover:bg-accent/30 transition-all text-center"
-                        >
-                          <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
-                            <Receipt className="w-5 h-5 text-green-500" />
-                          </div>
-                          <p className="text-sm font-semibold text-foreground">
-                            Payment Proof / Receipt
-                          </p>
-                          <p className="text-[11px] text-muted-foreground leading-tight">
-                            A receipt or payment confirmation. Will be saved as paid.
-                          </p>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ── Form (ready / saving) — shown only after doc type is selected ── */}
-                  {(phase === "ready" || phase === "saving") && docType && (
+                  {/* ── Form (ready / saving) ── */}
+                  {(phase === "ready" || phase === "saving") && (
                     <form ref={formRef} onSubmit={handleSave} className="space-y-4">
                       {/* Hidden fields */}
                       <input type="hidden" name="receipt_file_path" value={uploaded?.path ?? ""} />
+                      <input type="hidden" name="payment_proof_file_path" value={paymentProof?.path ?? ""} />
                       <input type="hidden" name="currency" value={fields.currency} />
-                      <input type="hidden" name="document_type" value={isInvoice ? "invoice" : "receipt"} />
-                      <input type="hidden" name="payment_status" value={isInvoice ? "unpaid" : "paid"} />
-                      <input type="hidden" name="expense_type" value={isInvoice ? "invoice" : "receipt"} />
+                      <input type="hidden" name="document_type" value={documentType} />
+                      <input type="hidden" name="payment_status" value={computedPaymentStatus} />
+                      <input type="hidden" name="expense_type" value={expenseType} />
                       {aiData && (
                         <>
                           <input
@@ -668,8 +813,8 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                         </>
                       )}
 
-                      {/* Invoice banner */}
-                      {isInvoice && (
+                      {/* Mode banner */}
+                      {isUnpaidBill && (
                         <div className="p-3 rounded-lg bg-orange-50 border border-orange-200 flex items-start gap-2.5">
                           <Info className="w-3.5 h-3.5 text-orange-500 mt-0.5 flex-shrink-0" />
                           <div className="text-xs text-orange-800">
@@ -681,24 +826,29 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                         </div>
                       )}
 
-                      {/* Doc type switcher */}
+                      {isPaidBillWithProof && (
+                        <div className="p-3 rounded-lg bg-green-50 border border-green-200 flex items-start gap-2.5">
+                          <Info className="w-3.5 h-3.5 text-green-600 mt-0.5 flex-shrink-0" />
+                          <div className="text-xs text-green-800">
+                            <p className="font-medium">This bill will be saved with payment details.</p>
+                            <p className="mt-0.5 text-green-700">
+                              Paid status is based on paid amount compared with bill amount.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Capture mode */}
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-muted-foreground">Document type:</span>
+                        <span className="text-[11px] text-muted-foreground">Capture mode:</span>
                         <span className={cn(
                           "text-[11px] font-medium px-2 py-0.5 rounded-md border",
-                          isInvoice
+                          isUnpaidBill
                             ? "bg-orange-50 text-orange-700 border-orange-200"
                             : "bg-green-50 text-green-700 border-green-200"
                         )}>
-                          {isInvoice ? "Invoice / Bill" : "Receipt / Payment Proof"}
+                          {selectedMode.title}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => setDocType(null)}
-                          className="text-[11px] text-primary hover:underline ml-1"
-                        >
-                          Change
-                        </button>
                       </div>
 
                       {/* AI result banner */}
@@ -791,7 +941,17 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                               step="0.01"
                               disabled={isFormDisabled}
                               value={fields.amount}
-                              onChange={(e) => setField("amount", e.target.value)}
+                              onChange={(e) => {
+                                const next = e.target.value;
+                                setFields((prev) => ({
+                                  ...prev,
+                                  amount: next,
+                                  paid_amount:
+                                    prev.paid_amount || computedPaymentStatus === "unpaid"
+                                      ? prev.paid_amount
+                                      : next,
+                                }));
+                              }}
                               placeholder="0.00"
                               className={inputClass("amount") + " pl-7"}
                             />
@@ -818,9 +978,9 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                         </FormField>
                       </div>
 
-                      {/* Row 3: Conditional — Invoice: Due Date + Status / Receipt: Payment Method + Status */}
+                      {/* Row 3: Due Date + Status */}
                       <div className="grid grid-cols-2 gap-3">
-                        {isInvoice ? (
+                        {!isPaymentProofOnly ? (
                           <FormField label="Due Date" needsReview={needsReview("due_date")}>
                             <input
                               type="date"
@@ -832,6 +992,85 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                             />
                           </FormField>
                         ) : (
+                          <input type="hidden" name="due_date" value="" />
+                        )}
+                        <FormField label="Status">
+                          <select
+                            name="status"
+                            disabled={isFormDisabled}
+                            value={fields.status}
+                            onChange={(e) => setField("status", e.target.value)}
+                            className={selectCls}
+                          >
+                            {STATUSES.map((s) => (
+                              <option key={s.value} value={s.value}>
+                                {s.label}
+                              </option>
+                            ))}
+                          </select>
+                        </FormField>
+                      </div>
+
+                      {/* Manual payment status */}
+                      {isManual && (
+                        <FormField label="Payment Status">
+                          <select
+                            disabled={isFormDisabled}
+                            value={fields.payment_status}
+                            onChange={(e) => {
+                              const next = e.target.value as FormFields["payment_status"];
+                              setFields((prev) => ({
+                                ...prev,
+                                payment_status: next,
+                                payment_date: next === "unpaid" ? "" : prev.payment_date || today,
+                                paid_amount: next === "unpaid" ? "" : prev.paid_amount || prev.amount,
+                              }));
+                            }}
+                            className={selectCls}
+                          >
+                            <option value="unpaid">Unpaid</option>
+                            <option value="paid">Paid</option>
+                            <option value="partially_paid">Partially Paid</option>
+                          </select>
+                        </FormField>
+                      )}
+
+                      {/* Payment details */}
+                      {computedPaymentStatus !== "unpaid" && (
+                        <>
+                          <div className="grid grid-cols-2 gap-3">
+                            <FormField label="Payment Date" required needsReview={needsReview("expense_date")}>
+                              <input
+                                type="date"
+                                name="payment_date"
+                                required
+                                disabled={isFormDisabled}
+                                value={fields.payment_date}
+                                onChange={(e) => setField("payment_date", e.target.value)}
+                                className={inputCls}
+                              />
+                            </FormField>
+                            <FormField label="Paid Amount" required needsReview={needsReview("amount")}>
+                              <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                                  {fields.currency === "INR" ? "₹" : fields.currency}
+                                </span>
+                                <input
+                                  type="number"
+                                  name="paid_amount"
+                                  required
+                                  min="0"
+                                  step="0.01"
+                                  disabled={isFormDisabled}
+                                  value={fields.paid_amount}
+                                  onChange={(e) => setField("paid_amount", e.target.value)}
+                                  placeholder={fields.amount || "0.00"}
+                                  className={inputCls + " pl-7"}
+                                />
+                              </div>
+                            </FormField>
+                          </div>
+
                           <FormField
                             label="Payment Method"
                             needsReview={needsReview("payment_method_guess")}
@@ -851,23 +1090,16 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                               ))}
                             </select>
                           </FormField>
-                        )}
-                        <FormField label="Status">
-                          <select
-                            name="status"
-                            disabled={isFormDisabled}
-                            value={fields.status}
-                            onChange={(e) => setField("status", e.target.value)}
-                            className={selectCls}
-                          >
-                            {STATUSES.map((s) => (
-                              <option key={s.value} value={s.value}>
-                                {s.label}
-                              </option>
-                            ))}
-                          </select>
-                        </FormField>
-                      </div>
+                        </>
+                      )}
+
+                      {computedPaymentStatus === "unpaid" && (
+                        <>
+                          <input type="hidden" name="payment_date" value="" />
+                          <input type="hidden" name="paid_amount" value="" />
+                          <input type="hidden" name="payment_method_id" value="" />
+                        </>
+                      )}
 
                       {/* Row 4: Description */}
                       <FormField
@@ -901,8 +1133,8 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                         />
                       </FormField>
 
-                      {/* Row 5.5: Payment Reference (receipts only) */}
-                      {isReceipt && (
+                      {/* Row 5.5: Payment Reference */}
+                      {computedPaymentStatus !== "unpaid" && (
                         <FormField label="Payment Reference">
                           <input
                             type="text"
@@ -936,7 +1168,7 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                           disabled={isFormDisabled}
                           className={cn(
                             "flex items-center gap-1.5 px-4 py-2 rounded-lg text-white text-sm font-medium disabled:opacity-60 transition-colors",
-                            isInvoice
+                            isUnpaidBill
                               ? "bg-orange-600 hover:bg-orange-700"
                               : "bg-primary hover:bg-primary/90"
                           )}
@@ -944,7 +1176,7 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                           <Save className="w-3.5 h-3.5" />
                           {phase === "saving"
                             ? "Saving…"
-                            : isInvoice
+                            : isUnpaidBill
                             ? "Save as Unpaid Invoice"
                             : "Save Expense"}
                         </button>

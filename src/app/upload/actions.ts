@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { ExpenseStatus, ExpenseType, DocumentType, PaymentStatus, Database } from "@/lib/supabase/types";
+import { areLikelyDuplicates } from "@/lib/review-issues";
 
 type ExpenseInsert = Database["public"]["Tables"]["expenses"]["Insert"];
 
@@ -18,6 +19,7 @@ const AI_JSON_SAFE_KEYS = [
   "category_guess",
   "description",
   "invoice_number",
+  "payment_reference",
   "confidence",
   "fields_needing_review",
 ] as const;
@@ -96,7 +98,7 @@ export async function saveReceiptExpenseAction(
   const description            = (formData.get("description")        as string | null)?.trim() || null;
   const invoice_number         = (formData.get("invoice_number")     as string | null)?.trim() || null;
   const notes                  = (formData.get("notes")              as string | null)?.trim() || null;
-  const status = ((formData.get("status") as string | null)?.trim() || "needs_review") as ExpenseStatus;
+  let status = ((formData.get("status") as string | null)?.trim() || "needs_review") as ExpenseStatus;
   const currency               = (formData.get("currency")           as string | null)?.trim() || "INR";
 
   // ── Phase 3C fields ────────────────────────────────────────────────────────
@@ -104,12 +106,30 @@ export async function saveReceiptExpenseAction(
   const payment_status   = ((formData.get("payment_status")    as string | null)?.trim() || "paid") as PaymentStatus;
   const due_date         = (formData.get("due_date")            as string | null)?.trim() || null;
   const payment_reference = (formData.get("payment_reference") as string | null)?.trim() || null;
+  const payment_proof_file_path = (formData.get("payment_proof_file_path") as string | null)?.trim() || null;
+  const payment_date_raw = (formData.get("payment_date") as string | null)?.trim() || null;
+  const paid_amount_raw = (formData.get("paid_amount") as string | null)?.trim() || null;
   const expense_type_raw = ((formData.get("expense_type")       as string | null)?.trim() || "receipt") as ExpenseType;
 
-  // For receipts / payment proofs: payment_date = expense_date, paid_amount = amount
-  // For invoices: both are null (unpaid)
-  const payment_date = document_type === "invoice" ? null : expense_date;
-  const paid_amount  = document_type === "invoice" ? null : amount;
+  let paid_amount = paid_amount_raw ? parseFloat(paid_amount_raw) : null;
+  if (paid_amount !== null && (isNaN(paid_amount) || paid_amount < 0)) {
+    return { error: "Paid amount must be a valid number ≥ 0." };
+  }
+
+  let payment_date = payment_date_raw;
+  let normalized_payment_status: PaymentStatus = payment_status;
+
+  if (payment_status === "unpaid") {
+    payment_date = null;
+    paid_amount = null;
+  } else {
+    if (paid_amount === null && payment_status === "paid") paid_amount = amount;
+    if (!payment_date) payment_date = expense_date;
+    if (paid_amount === null) {
+      return { error: "Paid amount is required for paid or partially paid expenses." };
+    }
+    normalized_payment_status = paid_amount >= amount ? "paid" : "partially_paid";
+  }
 
   // ── AI fields (compact extraction JSON only — no OpenAI calls here) ────────
   const raw_ai_json   = parseAiJson(formData.get("raw_ai_json") as string | null);
@@ -118,6 +138,35 @@ export async function saveReceiptExpenseAction(
 
   // ── Supabase insert (no storage access, no OpenAI calls) ──────────────────
   const supabase = await createClient();
+
+  const { data: existingRows } = await supabase
+    .from("expenses")
+    .select("id, expense_date, vendor, amount, invoice_number, payment_reference")
+    .or(
+      [
+        `vendor.ilike.${vendor.replaceAll(",", "\\,")}`,
+        invoice_number ? `invoice_number.eq.${invoice_number.replaceAll(",", "\\,")}` : "",
+        payment_reference ? `payment_reference.eq.${payment_reference.replaceAll(",", "\\,")}` : "",
+      ]
+        .filter(Boolean)
+        .join(",")
+    );
+
+  const duplicateFound = (existingRows ?? []).some((row) =>
+    areLikelyDuplicates(
+      {
+        id: "__new__",
+        expense_date,
+        vendor,
+        amount,
+        invoice_number,
+        payment_reference,
+      },
+      row
+    )
+  );
+
+  if (duplicateFound) status = "needs_review";
 
   const insert: ExpenseInsert = {
     expense_date,
@@ -135,11 +184,12 @@ export async function saveReceiptExpenseAction(
     raw_ai_json,
     ai_confidence: ai_confidence !== null && !isNaN(ai_confidence) ? ai_confidence : null,
     document_type,
-    payment_status,
+    payment_status: normalized_payment_status,
     due_date,
     payment_date,
     paid_amount,
     payment_reference,
+    payment_proof_file_path,
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

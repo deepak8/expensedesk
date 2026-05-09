@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+
 // ─── PATCH /api/expenses/[id]/mark-paid ──────────────────────────────────────
 
 export async function PATCH(

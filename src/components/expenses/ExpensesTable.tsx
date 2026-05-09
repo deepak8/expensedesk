@@ -15,6 +15,12 @@ import {
   DialogCloseButton,
 } from "@/components/ui/dialog";
 import type { CategoryRow, PaymentMethodRow, ExpenseWithRefs } from "@/lib/supabase/types";
+import {
+  deriveReviewIssues,
+  findDuplicateIds,
+  type ReviewIssue,
+  type ReviewIssueType,
+} from "@/lib/review-issues";
 
 const ExpenseFormModal = dynamic(
   () => import("@/components/expenses/ExpenseFormModal"),
@@ -44,6 +50,7 @@ export interface DisplayExpense {
   paymentStatus: "Paid" | "Unpaid" | "Partially Paid";
   documentType: string;
   dueDate: string | null;
+  reviewIssues: ReviewIssue[];
 }
 
 const STATUS_STYLES: Record<DisplayExpense["status"], string> = {
@@ -73,7 +80,24 @@ const PAYMENT_STATUS_MAP: Record<string, DisplayExpense["paymentStatus"]> = {
   partially_paid: "Partially Paid",
 };
 
-function toDisplay(row: ExpenseWithRefs): DisplayExpense {
+const REVIEW_STYLES: Record<ReviewIssue["tone"], string> = {
+  amber: "bg-amber-50 text-amber-700 border-amber-200",
+  orange: "bg-orange-50 text-orange-700 border-orange-200",
+  red: "bg-red-50 text-red-700 border-red-200",
+  blue: "bg-blue-50 text-blue-700 border-blue-200",
+  violet: "bg-violet-50 text-violet-700 border-violet-200",
+};
+
+const REVIEW_FILTERS: Array<{ value: "All Review" | ReviewIssueType; label: string }> = [
+  { value: "All Review", label: "All Review" },
+  { value: "needs_review", label: "Needs Review" },
+  { value: "possible_duplicate", label: "Possible Duplicate" },
+  { value: "missing_proof", label: "Missing Proof" },
+  { value: "amount_mismatch", label: "Amount Mismatch" },
+  { value: "low_ai_confidence", label: "Low AI Confidence" },
+];
+
+function toDisplay(row: ExpenseWithRefs, duplicateIds: Set<string>): DisplayExpense {
   return {
     id: row.id,
     date: row.expense_date,
@@ -89,6 +113,7 @@ function toDisplay(row: ExpenseWithRefs): DisplayExpense {
     paymentStatus: PAYMENT_STATUS_MAP[row.payment_status] ?? "Paid",
     documentType: row.document_type ?? "receipt",
     dueDate: row.due_date ?? null,
+    reviewIssues: deriveReviewIssues(row, duplicateIds),
   };
 }
 
@@ -127,6 +152,7 @@ export default function ExpensesTable() {
   const [method, setMethod] = useState("All Methods");
   const [status, setStatus] = useState("All Statuses");
   const [paymentFilter, setPaymentFilter] = useState("All Payments");
+  const [reviewFilter, setReviewFilter] = useState<"All Review" | ReviewIssueType>("All Review");
 
   // ─── Modal state ─────────────────────────────────────────────────────────────
   const [formOpen, setFormOpen] = useState(false);
@@ -177,7 +203,10 @@ export default function ExpensesTable() {
   useEffect(() => { loadData(); }, [loadData]);
 
   // ─── Derived display data ────────────────────────────────────────────────────
-  const expenses = useMemo(() => rawExpenses.map(toDisplay), [rawExpenses]);
+  const expenses = useMemo(() => {
+    const duplicateIds = findDuplicateIds(rawExpenses);
+    return rawExpenses.map((row) => toDisplay(row, duplicateIds));
+  }, [rawExpenses]);
 
   const categories = useMemo(() => [...new Set(categoryRows.map((c) => c.name))].sort(), [categoryRows]);
   const paymentMethods = useMemo(() => [...new Set(paymentMethodRows.map((m) => m.name))].sort(), [paymentMethodRows]);
@@ -193,16 +222,18 @@ export default function ExpensesTable() {
       if (method !== "All Methods" && e.paymentMethod !== method) return false;
       if (status !== "All Statuses" && e.status !== status) return false;
       if (paymentFilter !== "All Payments" && e.paymentStatus !== paymentFilter) return false;
+      if (reviewFilter !== "All Review" && !e.reviewIssues.some((issue) => issue.type === reviewFilter)) return false;
       return true;
     });
-  }, [expenses, category, method, status, paymentFilter]);
+  }, [expenses, category, method, status, paymentFilter, reviewFilter]);
 
   const total = filtered.reduce((s, e) => s + e.amount, 0);
   const hasFilters =
     category !== "All Categories" ||
     method !== "All Methods" ||
     status !== "All Statuses" ||
-    paymentFilter !== "All Payments";
+    paymentFilter !== "All Payments" ||
+    reviewFilter !== "All Review";
 
   // ─── Actions ─────────────────────────────────────────────────────────────────
   function openCreate() {
@@ -244,6 +275,7 @@ export default function ExpensesTable() {
     setMethod("All Methods");
     setStatus("All Statuses");
     setPaymentFilter("All Payments");
+    setReviewFilter("All Review");
   }
 
   /** Determine the label for the receipt/document preview modal */
@@ -322,6 +354,14 @@ export default function ExpensesTable() {
           <FilterSelect options={methodOptions} value={method} onChange={setMethod} />
           <FilterSelect options={statusOptions} value={status} onChange={setStatus} />
           <FilterSelect options={paymentOptions} value={paymentFilter} onChange={setPaymentFilter} />
+          <FilterSelect
+            options={REVIEW_FILTERS.map((r) => r.label)}
+            value={REVIEW_FILTERS.find((r) => r.value === reviewFilter)?.label ?? "All Review"}
+            onChange={(label) => {
+              const next = REVIEW_FILTERS.find((r) => r.label === label)?.value ?? "All Review";
+              setReviewFilter(next);
+            }}
+          />
           {hasFilters && (
             <button
               onClick={clearFilters}
@@ -344,6 +384,7 @@ export default function ExpensesTable() {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Method</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">Amount</th>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground">Docs</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Attention</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Status</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Payment</th>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground w-20">Actions</th>
@@ -410,6 +451,30 @@ export default function ExpensesTable() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
+                    {e.reviewIssues.length > 0 ? (
+                      <div className="flex flex-wrap gap-1 max-w-[180px]">
+                        {e.reviewIssues.slice(0, 2).map((issue) => (
+                          <span
+                            key={issue.type}
+                            className={cn(
+                              "text-[10px] px-1.5 py-0.5 rounded-md border font-medium whitespace-nowrap",
+                              REVIEW_STYLES[issue.tone]
+                            )}
+                          >
+                            {issue.label}
+                          </span>
+                        ))}
+                        {e.reviewIssues.length > 2 && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-border bg-muted text-muted-foreground font-medium">
+                            +{e.reviewIssues.length - 2}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground/40 text-xs">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
                     <span
                       className={cn(
                         "text-[11px] px-2 py-0.5 rounded-md border font-medium",
@@ -462,7 +527,7 @@ export default function ExpensesTable() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                  <td colSpan={11} className="px-4 py-12 text-center text-sm text-muted-foreground">
                     No expenses match the selected filters.
                   </td>
                 </tr>

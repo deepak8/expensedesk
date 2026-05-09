@@ -2,6 +2,8 @@ import { isSupabaseConfigured, getCategories, getPaymentMethods } from "@/lib/su
 import UploadReceiptShell from "@/components/upload/UploadReceiptShell";
 import type { CategoryRow, PaymentMethodRow } from "@/lib/supabase/types";
 
+export const dynamic = "force-dynamic";
+
 export default async function UploadPage() {
   let categoryRows: CategoryRow[] = [];
   let paymentMethodRows: PaymentMethodRow[] = [];

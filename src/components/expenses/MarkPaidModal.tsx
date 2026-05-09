@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Upload, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { Upload, CheckCircle, AlertCircle, Loader2, Sparkles, Info } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +17,7 @@ import {
   validateReceiptFile,
 } from "@/lib/supabase/storage";
 import { createClient } from "@/lib/supabase/client";
+import { extractReceiptAction } from "@/app/upload/extract-receipt";
 
 interface MarkPaidExpense {
   id: string;
@@ -70,12 +71,25 @@ export default function MarkPaidModal({
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofPath, setProofPath] = useState<string | null>(null);
   const [uploadingProof, setUploadingProof] = useState(false);
+  const [extractingProof, setExtractingProof] = useState(false);
+  const [paymentDate, setPaymentDate] = useState(today);
+  const [paidAmount, setPaidAmount] = useState(String(expense.amount));
+  const [paymentMethodId, setPaymentMethodId] = useState("");
+  const [paymentReference, setPaymentReference] = useState("");
+  const [notes, setNotes] = useState("");
 
   function handleClose() {
     if (isPending) return;
     setError(null);
     setProofFile(null);
+    setProofPath(null);
+    setPaymentDate(today);
+    setPaidAmount(String(expense.amount));
+    setPaymentMethodId("");
+    setPaymentReference("");
+    setNotes("");
     onOpenChange(false);
   }
 
@@ -90,7 +104,65 @@ export default function MarkPaidModal({
       }
     }
     setProofFile(file);
+    setProofPath(null);
     setError(null);
+  }
+
+  async function uploadProofIfNeeded(): Promise<string | null> {
+    if (proofPath) return proofPath;
+    if (!proofFile) return null;
+
+    setUploadingProof(true);
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error("Not authenticated.");
+
+    const result = await uploadReceiptFile(user.id, proofFile);
+    if (result.error) throw new Error(result.error);
+    setProofPath(result.path);
+    setUploadingProof(false);
+    return result.path;
+  }
+
+  async function handleExtractProof() {
+    if (!proofFile && !proofPath) {
+      setError("Choose a payment proof file before extracting.");
+      return;
+    }
+
+    setError(null);
+    setExtractingProof(true);
+    try {
+      const path = await uploadProofIfNeeded();
+      if (!path) throw new Error("Choose a payment proof file before extracting.");
+
+      const result = await extractReceiptAction(
+        path,
+        [],
+        paymentMethodRows.map((m) => m.name)
+      );
+
+      if (result.error || !result.data) {
+        throw new Error(result.error ?? "Extraction failed. Please enter details manually.");
+      }
+
+      const ai = result.data;
+      const matchedMethod = paymentMethodRows.find(
+        (m) => m.name.toLowerCase() === ai.payment_method_guess?.toLowerCase()
+      );
+
+      if (ai.expense_date) setPaymentDate(ai.expense_date);
+      if (ai.amount !== null) setPaidAmount(String(ai.amount));
+      if (matchedMethod) setPaymentMethodId(String(matchedMethod.id));
+      if (ai.invoice_number) setPaymentReference(ai.invoice_number);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Extraction failed.");
+    } finally {
+      setUploadingProof(false);
+      setExtractingProof(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -100,21 +172,8 @@ export default function MarkPaidModal({
     setIsPending(true);
 
     try {
-      // 1. Upload payment proof if selected
-      let proofPath: string | null = null;
-      if (proofFile) {
-        setUploadingProof(true);
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) throw new Error("Not authenticated.");
-
-        const result = await uploadReceiptFile(user.id, proofFile);
-        if (result.error) throw new Error(result.error);
-        proofPath = result.path;
-        setUploadingProof(false);
-      }
+      // 1. Upload payment proof if selected and not already uploaded for extraction
+      const uploadedProofPath = await uploadProofIfNeeded();
 
       // 2. Call mark-paid API
       const body = {
@@ -122,7 +181,7 @@ export default function MarkPaidModal({
         paid_amount: Number(fd.get("paid_amount")),
         payment_method_id: fd.get("payment_method_id") || null,
         payment_reference: (fd.get("payment_reference") as string)?.trim() || null,
-        payment_proof_file_path: proofPath,
+        payment_proof_file_path: uploadedProofPath,
         notes: (fd.get("notes") as string)?.trim() || null,
       };
 
@@ -138,6 +197,7 @@ export default function MarkPaidModal({
       }
 
       setProofFile(null);
+      setProofPath(null);
       onOpenChange(false);
       onSaved();
     } catch (err) {
@@ -147,6 +207,10 @@ export default function MarkPaidModal({
       setIsPending(false);
     }
   }
+
+  const paidAmountNumber = Number(paidAmount);
+  const showAmountWarning =
+    paidAmount.trim() !== "" && !Number.isNaN(paidAmountNumber) && paidAmountNumber !== expense.amount;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -180,7 +244,8 @@ export default function MarkPaidModal({
                   name="payment_date"
                   required
                   disabled={isPending}
-                  defaultValue={today}
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
                   className={inputCls}
                 />
               </FormField>
@@ -196,18 +261,27 @@ export default function MarkPaidModal({
                     min="0"
                     step="0.01"
                     disabled={isPending}
-                    defaultValue={expense.amount}
+                    value={paidAmount}
+                    onChange={(e) => setPaidAmount(e.target.value)}
                     className={inputCls + " pl-7"}
                   />
                 </div>
               </FormField>
             </div>
 
+            {showAmountWarning && (
+              <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2 text-xs text-amber-800">
+                <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                Paid amount differs from invoice amount.
+              </div>
+            )}
+
             <FormField label="Payment Method">
               <select
                 name="payment_method_id"
                 disabled={isPending}
-                defaultValue=""
+                value={paymentMethodId}
+                onChange={(e) => setPaymentMethodId(e.target.value)}
                 className={selectCls}
               >
                 <option value="">Select…</option>
@@ -225,13 +299,15 @@ export default function MarkPaidModal({
                 name="payment_reference"
                 disabled={isPending}
                 placeholder="e.g. UPI-TXNID-123456"
+                value={paymentReference}
+                onChange={(e) => setPaymentReference(e.target.value)}
                 className={inputCls}
               />
             </FormField>
 
             {/* Payment proof file upload */}
             <FormField label="Upload Payment Proof (optional)">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <label
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-white text-xs font-medium text-foreground hover:bg-muted transition-colors cursor-pointer ${
                     isPending ? "opacity-60 pointer-events-none" : ""
@@ -252,6 +328,26 @@ export default function MarkPaidModal({
                     {proofFile.name}
                   </span>
                 )}
+                {(proofFile || proofPath) && (
+                  <button
+                    type="button"
+                    disabled={isPending || extractingProof || uploadingProof}
+                    onClick={handleExtractProof}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium hover:bg-violet-700 disabled:opacity-60 transition-colors"
+                  >
+                    {extractingProof || uploadingProof ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        {uploadingProof ? "Uploading…" : "Extracting…"}
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Extract payment details
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </FormField>
 
@@ -261,6 +357,8 @@ export default function MarkPaidModal({
                 rows={2}
                 disabled={isPending}
                 placeholder="Optional"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
                 className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors resize-none disabled:opacity-60"
               />
             </FormField>
