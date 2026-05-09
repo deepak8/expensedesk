@@ -24,6 +24,25 @@ It is **not** a full accounting platform, payroll system, or GST/tax tool.
 
 ---
 
+## Latest Stability Audit
+
+- Production-mode audit passed after a clean rebuild from a removed `.next` directory.
+- Verified production command: `npm run start -- -p 3001`, which runs `next start -p 3001` after `npm run build`.
+- Core Phase 3C flows were verified in production mode: sign in, dashboard, expenses, upload page, save unpaid invoice, unpaid invoice appears in Expenses, mark invoice paid, upload/view payment proof, and view original invoice/receipt preview.
+- Phase 3C migration is applied in the current Supabase database. The Phase 3C columns can be inserted, selected, and updated successfully.
+- The Mark Paid modal FormData bug was fixed by capturing `FormData` from `event.currentTarget` at submit time before any awaited upload work.
+- The major local instability was traced to corrupted/stale `.next` output plus conflicting Claude launch configs. A clean rebuild restored production mode:
+
+```bash
+rm -rf .next
+npm run build
+npm run start -- -p 3001
+```
+
+- Dev/Turbopack mode may still be unreliable; production mode with webpack build is currently verified.
+
+---
+
 ## Current Implemented Features
 
 ### Authentication
@@ -150,6 +169,7 @@ It is **not** a full accounting platform, payroll system, or GST/tax tool.
 
 - Project hosted on Supabase cloud (free tier)
 - Auth: email/password provider enabled
+- Phase 3C migration is applied in the current database
 - Storage: private bucket named `receipts`
 - Storage policies: authenticated users can read/write files scoped to their user ID folder
 - Signed URLs used for all file access (never public URLs)

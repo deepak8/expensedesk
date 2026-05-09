@@ -95,6 +95,7 @@ export default function MarkPaidModal({
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const fd = new FormData(e.currentTarget);
     setError(null);
     setIsPending(true);
 
@@ -116,7 +117,6 @@ export default function MarkPaidModal({
       }
 
       // 2. Call mark-paid API
-      const fd = new FormData(e.currentTarget);
       const body = {
         payment_date: (fd.get("payment_date") as string)?.trim(),
         paid_amount: Number(fd.get("paid_amount")),

@@ -9,8 +9,9 @@ ExpenseDesk is a small-business expense management app built with Next.js 16.2.6
 - **All application code is written** through Phase 3C (invoice/payment workflow)
 - **TypeScript compiles cleanly** (`npx tsc --noEmit` passes)
 - **Production build passes** (`npm run build` with `--webpack` flag)
-- **Product features have NOT been fully verified end-to-end** due to dev server instability during development
-- **Phase 3C database migration has NOT been applied** to Supabase (`supabase/phase-3c-invoice-payment.sql`)
+- **Production-mode audit passed** for the core Phase 3C flows
+- **Phase 3C database migration is applied** in the current Supabase database
+- **MarkPaidModal FormData bug is fixed**
 - **Dev server (Turbopack) has been unreliable** — repeated crashes with manifest/cache errors that are not caused by application code
 
 ## What Happened
@@ -19,7 +20,17 @@ During Phase 3C development, the Next.js 16 Turbopack dev server became increasi
 
 A critical finding: **Turbopack's production builder skips generating `client-reference-manifest` files for page routes**, causing all pages to 500 at runtime. The fix was switching the build to webpack (`next build --webpack`). The production server (`next start`) with a webpack build has been stable.
 
-The dev server issues consumed significant debugging time. Product logic was written but not fully exercised.
+The latest stability audit found that the major production-mode disappearance issue came from corrupted/stale `.next` output and conflicting Claude launch configs. A clean rebuild fixed production mode:
+
+```bash
+rm -rf .next
+npm run build
+npm run start -- -p 3001
+```
+
+Both Claude launch configs should run production start on port 3001. The parent config must not run `npm run dev` on that same port.
+
+The audit also verified that Phase 3C migration is applied in the current Supabase database and that production-mode flows work. The Mark Paid modal bug was fixed by capturing `FormData` from `event.currentTarget` before awaited payment-proof upload work.
 
 ---
 
@@ -27,28 +38,20 @@ The dev server issues consumed significant debugging time. Product logic was wri
 
 ### Do not add features first.
 
-### Step 1: Verify app stability in production mode
+### Step 1: Start from clean production mode when investigating runtime issues
 
 ```bash
 cd expense-desk
-npm install
+rm -rf .next
 npm run build          # uses --webpack flag
 npm run start -- -p 3001
 ```
 
-Open http://localhost:3001 and confirm the server starts without errors.
+Open http://localhost:3001 and confirm the server starts without errors. This is the verified path for production-mode testing.
 
-### Step 2: Apply the Phase 3C migration
+### Step 2: Continue product work from the verified baseline
 
-Run `supabase/phase-3c-invoice-payment.sql` in the Supabase SQL editor. Note: the `ALTER TYPE ... ADD VALUE` line must be run separately first (cannot run inside a transaction).
-
-### Step 3: Confirm all core flows work
-
-Run through the verification checklist below. Document any failures with exact error messages and whether they occur in production mode, dev mode, or both.
-
-### Step 4: Only then continue product work
-
-If production mode is stable and core flows work, proceed with:
+Production mode is currently verified. If continuing product work, keep using production mode for verification unless dev/Turbopack instability is explicitly being investigated. Good next candidates:
 - Phase 3B (AI review quality, duplicate detection)
 - Or whatever the next priority is
 
@@ -56,33 +59,23 @@ If production mode is stable and core flows work, proceed with:
 
 ## Verification Checklist
 
-Run these checks in **production mode** (`npm run build && npm run start -- -p 3001`):
+Latest production-mode audit passed these checks:
 
-- [ ] Inspect `package.json` scripts — confirm `build` uses `--webpack`
-- [ ] `npm run build` completes without errors
-- [ ] `npm run start -- -p 3001` starts without errors
-- [ ] Server logs show no InvariantError or manifest errors
-- [ ] Visit `/` — redirects to `/sign-in` (unauthenticated)
-- [ ] Sign in with valid credentials — redirected to dashboard
-- [ ] Dashboard loads with data (or mock data fallback)
-- [ ] Navigate to `/expenses` — expense list loads
-- [ ] Add an expense — appears in list
-- [ ] Edit an expense — changes saved
-- [ ] Delete an expense — removed from list
-- [ ] Navigate to `/upload` — upload page loads
-- [ ] Upload a receipt image — preview works, save succeeds
-- [ ] Select "Invoice / Bill" document type — form shows unpaid fields
-- [ ] Save an invoice — saved with `payment_status = 'unpaid'`
-- [ ] Select "Receipt / Payment Proof" document type — form shows paid fields
-- [ ] Save a receipt — saved with `payment_status = 'paid'`
-- [ ] Back on `/expenses` — payment status badges visible
-- [ ] Click "Mark Paid" on an unpaid invoice — modal opens
-- [ ] Fill payment details and submit — status changes to paid
-- [ ] Click receipt/invoice icon — preview modal opens with correct file
-- [ ] Extract receipt with AI — form prefilled with extracted values
-- [ ] Navigate to `/salary` — salary page loads
-- [ ] Check server logs — no unhandled errors
-- [ ] Check browser console — no runtime errors
+- [x] Inspect `package.json` scripts — `build` uses `--webpack`
+- [x] `npm run build` completes without errors
+- [x] `npm run start -- -p 3001` starts production mode
+- [x] Sign in with valid credentials
+- [x] Dashboard loads
+- [x] Navigate to `/expenses` — expense list loads
+- [x] Navigate to `/upload` — upload page loads
+- [x] Upload an invoice image and save as unpaid
+- [x] Unpaid invoice appears in Expenses
+- [x] Mark unpaid invoice as paid
+- [x] Upload payment proof during mark-paid
+- [x] View original invoice/receipt preview
+- [x] View payment proof preview
+
+Not part of the latest audit pass: add/edit/delete manual expense, AI extraction, salary page, and invalid sign-in.
 
 ---
 
@@ -106,7 +99,7 @@ Before investigating any error:
 
 ### If production mode is stable
 
-Document that finding and proceed with product work. Use production mode for testing. Dev mode is a convenience, not a requirement.
+Production mode is currently verified after a clean rebuild. Use production mode for testing. Dev mode is a convenience, not a requirement.
 
 ### If production mode crashes
 
@@ -128,5 +121,5 @@ Capture the exact error from server stdout/stderr before changing any code. The 
 | `src/lib/supabase/types.ts` | Hand-maintained TypeScript types for Supabase tables |
 | `src/lib/openai/extract.ts` | OpenAI GPT-4o receipt extraction logic |
 | `supabase/schema.sql` | Full database schema (for new projects) |
-| `supabase/phase-3c-invoice-payment.sql` | Phase 3C migration (for existing databases — NOT YET APPLIED) |
-| `.claude/launch.json` | Dev server configuration for Claude Code preview tool |
+| `supabase/phase-3c-invoice-payment.sql` | Phase 3C migration for other existing databases; already applied in current Supabase database |
+| `.claude/launch.json` | Claude preview configuration; should run production `npm run start -- -p 3001`, not `npm run dev` |

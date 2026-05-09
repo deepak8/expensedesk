@@ -14,6 +14,27 @@ npm run start -- -p 3001
 
 The app will be available at **http://localhost:3001**.
 
+If production mode starts showing missing `.next/server/app/*` files or missing client-reference-manifest errors, rebuild from a clean output directory:
+
+```bash
+rm -rf .next
+npm run build
+npm run start -- -p 3001
+```
+
+This clean rebuild fixed the latest production-mode audit. The issue was traced to corrupted/stale `.next` output, not Supabase, OpenAI, RLS, or product logic.
+
+### Claude Preview Launch
+
+Both Claude preview configs are intentionally set to production mode on port 3001:
+
+- `/Users/deepakh/Documents/ExpenseDesk/.claude/launch.json`
+- `/Users/deepakh/Documents/ExpenseDesk/expense-desk/.claude/launch.json`
+
+The parent config keeps `cwd: "expense-desk"` and runs `npm run start -- -p 3001`. The project config runs the same command from the project root. Preview launches should therefore start `next start`, not `next dev`. Run `npm run build` first after code changes so the production server has a fresh `.next` bundle.
+
+The parent config must not run `npm run dev` on port 3001. Running dev/Turbopack and production preview on the same port can make `.next` state and runtime errors hard to interpret.
+
 ### Dev Mode
 
 Dev mode uses Turbopack for fast hot-reload. It has been unstable on this project/machine (see warning below).
@@ -23,7 +44,7 @@ npm install
 npm run dev
 ```
 
-Dev server runs on **http://localhost:3000** by default (or 3001 if configured via `.claude/launch.json`).
+Dev server runs on **http://localhost:3000** by default. The Claude preview configs are deliberately reserved for production `next start` on port 3001.
 
 ### Warning: Dev Mode Instability
 
@@ -63,11 +84,13 @@ The following SQL files must be run in the Supabase SQL editor, in order:
 | `supabase/phase-1b-rls.sql` | RLS policy adjustments | Already applied |
 | `supabase/fix-rls-anon.sql` | RLS fix for anonymous access | Already applied |
 | `supabase/phase-3a-ai-confidence.sql` | Adds `ai_confidence` and `raw_ai_json` columns | Already applied |
-| `supabase/phase-3c-invoice-payment.sql` | Adds Phase 3C columns to existing databases (ALTER TABLE) | **NOT YET APPLIED** |
+| `supabase/phase-3c-invoice-payment.sql` | Adds Phase 3C columns to existing databases (ALTER TABLE) | Applied in current Supabase database |
 
 ### Phase 3C Migration Note
 
-`supabase/phase-3c-invoice-payment.sql` must be run on the existing Supabase database before Phase 3C features (invoice workflow, payment status, mark paid) will work. The `ALTER TYPE ... ADD VALUE` line must be run separately from the rest due to PostgreSQL transaction limitations.
+`supabase/phase-3c-invoice-payment.sql` is applied in the current Supabase database. The latest production audit confirmed that Phase 3C columns can be inserted, selected, and updated.
+
+For another existing Supabase database, run `supabase/phase-3c-invoice-payment.sql` before using Phase 3C features. The `ALTER TYPE ... ADD VALUE` line must be run separately from the rest due to PostgreSQL transaction limitations.
 
 For a **new project**, `supabase/schema.sql` already includes all Phase 3C columns in the CREATE TABLE statement — no need to run the Phase 3C migration separately.
 
@@ -114,6 +137,8 @@ npm run start -- -p 3001
 
 Production mode uses `next start`, which serves the pre-built output without Turbopack. The server is stable and does not suffer from the SST cache corruption issues seen in dev mode.
 
+Latest audit result: production mode passed sign-in, dashboard, expenses, upload page, unpaid invoice save, unpaid invoice listing, mark-paid with payment proof upload, payment proof preview, and original invoice/receipt preview.
+
 ---
 
 ## How to Reset Dev Cache
@@ -142,6 +167,8 @@ npm run start -- -p 3001
 The `build` script in `package.json` uses `next build --webpack` because the Turbopack builder has a bug in Next.js 16.2.6 that skips generating `client-reference-manifest` files for page routes. This causes `InvariantError` crashes at runtime in production mode. The webpack builder generates all manifests correctly.
 
 Do not remove the `--webpack` flag from the build script without verifying that Turbopack generates client reference manifests for all page routes.
+
+If production output looks inconsistent, confirm no process is running `next dev`, `npm run dev`, `npm install`, or removing `.next` while `next start` is serving the app.
 
 ---
 

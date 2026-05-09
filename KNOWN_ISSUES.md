@@ -4,7 +4,7 @@
 
 ### Summary
 
-The Next.js 16.2.6 Turbopack dev server has repeatedly crashed during development. These crashes are **not caused by application code** — they are Turbopack bundler/cache bugs. The production build (webpack) and production server (`next start`) have been stable.
+The Next.js 16.2.6 Turbopack dev server has repeatedly crashed during development. These crashes are **not caused by application code** — they are Turbopack bundler/cache bugs. Production mode is currently verified when built with webpack and started from a clean `.next` output.
 
 ### Symptoms
 
@@ -29,35 +29,41 @@ The build script has been changed to `next build --webpack` to work around this.
 - **Low disk space** was one contributing factor earlier — Turbopack's SST cache writes fail silently when disk is near full. However, crashes continued even after freeing disk space (31 GB+ available).
 - **Supabase cold-start ETIMEDOUT** — the Supabase free-tier project spins down after inactivity. The first `getUser()` call times out at the socket level, which can disrupt Turbopack's compilation pipeline. This was mitigated by skipping auth calls for auth routes in `proxy.ts`.
 - **SST cache corruption** — Turbopack uses a persistent RocksDB/LevelDB cache in `.next/dev/cache/turbopack/`. Once corrupted, all routes return 500 until the cache is wiped.
+- **Corrupted/stale `.next` production output** — a stale output tree with `.next/dev` artifacts and duplicate conflict-style directories caused missing `.next/server/app/*` files and manifest errors under `next start`. Removing `.next` and rebuilding fixed production mode.
+- **Conflicting Claude launch configs** — the parent launch config previously ran `npm run dev` on port 3001 while the project config ran production start. Both configs now run production start, and the parent config must not be changed back to `npm run dev` on port 3001.
 
 ### Attempted Fixes (Partial List)
 
 | Fix | Result |
 |---|---|
-| Clearing `.next` directory | Temporarily resolved, but crashes recurred |
+| Clearing `.next` directory | Required when output is stale or corrupted; clean rebuild fixed the latest production issue |
 | Switching to webpack for production build | **Fixed production mode** |
 | Dynamic importing modals (`ssr: false`) | Reduced bundle size, but did not prevent crashes |
 | Moving Expenses data behind API routes (removing server actions) | Reduced server-reference-manifest dependency, but did not prevent crashes |
 | Skipping auth calls for `/sign-in` and `/api/auth/*` routes | Eliminated one ETIMEDOUT trigger, but did not prevent all crashes |
 | Adding `predev` script to wipe `.next` before dev start | Ensured clean start, but was destructive (deleted production builds) — removed |
-| Using production server (`next start`) | **Stable when built with webpack** |
+| Using production server (`next start`) | **Verified stable after clean webpack rebuild** |
 | Instrumenting uncaught exception handler for ETIMEDOUT | Prevents process crash from socket errors, but does not fix Turbopack |
 
 ### Current Status
 
 - **Production build passes** (`npm run build` with `--webpack` flag)
-- **Production server is stable** (`next start`)
+- **Production server is verified** (`next start`) after clean rebuild
 - **Dev server remains unreliable** — may crash during navigation or compilation
-- **Product logic has not been verified end-to-end** due to dev instability. A clean verification pass is needed.
+- **Production-mode audit passed** for sign-in, dashboard, expenses, upload, unpaid invoice save, mark-paid with payment proof upload, and invoice/payment proof previews
+- **MarkPaidModal FormData bug is fixed** by capturing `FormData` from `event.currentTarget` before awaited upload work
 
 ### Recommendation
 
-Do not keep patching Turbopack/dev server behavior as product fixes. The next agent should:
+Do not keep patching Turbopack/dev server behavior as product fixes. Use production mode for product verification:
 
-1. Verify app stability in production mode first
-2. Confirm all core flows work end-to-end
-3. Only then continue product work
-4. If dev mode crashes persist, document them separately from product bugs
+```bash
+rm -rf .next
+npm run build
+npm run start -- -p 3001
+```
+
+If dev mode crashes persist, document them separately from product bugs.
 
 ---
 
@@ -71,13 +77,11 @@ Do not keep patching Turbopack/dev server behavior as product fixes. The next ag
 
 ---
 
-## Phase 3C Migration Not Yet Applied
+## Phase 3C Migration Applied
 
-The `supabase/phase-3c-invoice-payment.sql` migration file has been written but **has not been run on the Supabase database**. Until this migration is applied:
+The `supabase/phase-3c-invoice-payment.sql` migration is applied in the current Supabase database. The production audit confirmed that Phase 3C columns can be inserted, selected, and updated.
 
-- Phase 3C features (invoice workflow, payment status, mark paid) will not work against the database
-- The new columns (`document_type`, `payment_status`, `due_date`, `payment_date`, `paid_amount`, `payment_reference`, `payment_proof_file_path`) do not exist in the database yet
-- `SELECT *` queries will still work (missing columns return as undefined), but INSERT/UPDATE with the new fields will fail
+For a new or separate existing Supabase database, run the migration before using Phase 3C features. The current database does not need this migration rerun.
 
 ---
 
@@ -106,4 +110,5 @@ If an expense is deleted or its receipt is replaced, the old file in Supabase St
 | Use the Supabase service role key in client code or API routes | Bypasses RLS entirely. |
 | Auto-save AI extraction without user review | AI extraction is imperfect. Silent auto-save would create incorrect records. |
 | Remove `--webpack` from the build script | Turbopack build skips client-reference-manifest files, causing runtime InvariantErrors. |
+| Change the parent `.claude/launch.json` back to `npm run dev` on port 3001 | It can confuse dev/Turbopack and production-mode testing on the same port. |
 | Expand into payroll, GST, or accounting workflows without planning | These require significant data model changes that would conflict with the current schema. |
