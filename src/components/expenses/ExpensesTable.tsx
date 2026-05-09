@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { Plus, Filter, Receipt, Pencil, Trash2 } from "lucide-react";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
+import { Plus, Filter, Receipt, Pencil, Trash2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Header from "@/components/Header";
-import ExpenseFormModal from "@/components/expenses/ExpenseFormModal";
 import {
   Dialog,
   DialogContent,
@@ -15,8 +14,16 @@ import {
   DialogFooter,
   DialogCloseButton,
 } from "@/components/ui/dialog";
-import { deleteExpenseAction } from "@/app/expenses/actions";
 import type { CategoryRow, PaymentMethodRow, ExpenseWithRefs } from "@/lib/supabase/types";
+
+const ExpenseFormModal = dynamic(
+  () => import("@/components/expenses/ExpenseFormModal"),
+  { ssr: false }
+);
+const ReceiptPreviewModal = dynamic(
+  () => import("@/components/expenses/ReceiptPreviewModal"),
+  { ssr: false }
+);
 
 export interface DisplayExpense {
   id: string;
@@ -27,6 +34,7 @@ export interface DisplayExpense {
   paymentMethod: string;
   amount: number;
   hasReceipt: boolean;
+  receiptPath: string | null;
   status: "Verified" | "Needs Review" | "Pending" | "Draft" | "Missing Receipt";
 }
 
@@ -37,6 +45,28 @@ const STATUS_STYLES: Record<DisplayExpense["status"], string> = {
   Draft: "bg-gray-100 text-gray-500 border-gray-200",
   "Missing Receipt": "bg-red-50 text-red-600 border-red-200",
 };
+
+const STATUS_MAP: Record<string, DisplayExpense["status"]> = {
+  verified: "Verified",
+  needs_review: "Needs Review",
+  draft: "Draft",
+  missing_receipt: "Missing Receipt",
+};
+
+function toDisplay(row: ExpenseWithRefs): DisplayExpense {
+  return {
+    id: row.id,
+    date: row.expense_date,
+    vendor: row.vendor,
+    category: row.category_name ?? "Uncategorised",
+    description: row.description ?? "",
+    paymentMethod: row.payment_method_name ?? "—",
+    amount: Number(row.amount),
+    hasReceipt: !!row.receipt_file_path,
+    receiptPath: row.receipt_file_path ?? null,
+    status: STATUS_MAP[row.status] ?? "Draft",
+  };
+}
 
 function FilterSelect({
   options,
@@ -54,40 +84,70 @@ function FilterSelect({
       className="text-xs border border-border rounded-lg px-3 py-2 bg-white text-foreground appearance-none cursor-pointer hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors"
     >
       {options.map((o) => (
-        <option key={o} value={o}>
-          {o}
-        </option>
+        <option key={o} value={o}>{o}</option>
       ))}
     </select>
   );
 }
 
-interface Props {
-  initialExpenses: DisplayExpense[];
-  rawExpenses: ExpenseWithRefs[];
-  categoryRows: CategoryRow[];
-  paymentMethodRows: PaymentMethodRow[];
-}
+export default function ExpensesTable() {
+  // ─── Data state ──────────────────────────────────────────────────────────────
+  const [rawExpenses, setRawExpenses] = useState<ExpenseWithRefs[]>([]);
+  const [categoryRows, setCategoryRows] = useState<CategoryRow[]>([]);
+  const [paymentMethodRows, setPaymentMethodRows] = useState<PaymentMethodRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-export default function ExpensesTable({
-  initialExpenses,
-  rawExpenses,
-  categoryRows,
-  paymentMethodRows,
-}: Props) {
-  const router = useRouter();
-  const [isPendingDelete, startDeleteTransition] = useTransition();
-
-  // Filter state
+  // ─── Filter state ────────────────────────────────────────────────────────────
   const [category, setCategory] = useState("All Categories");
   const [method, setMethod] = useState("All Methods");
   const [status, setStatus] = useState("All Statuses");
 
-  // Modal state
+  // ─── Modal state ─────────────────────────────────────────────────────────────
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ExpenseWithRefs | undefined>();
   const [deleteTarget, setDeleteTarget] = useState<DisplayExpense | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [previewReceipt, setPreviewReceipt] = useState<{ path: string; vendor: string } | null>(null);
+
+  // ─── Load all data ───────────────────────────────────────────────────────────
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setFetchError(null);
+    try {
+      const [expRes, catRes, pmRes] = await Promise.all([
+        fetch("/api/expenses"),
+        fetch("/api/categories"),
+        fetch("/api/payment-methods"),
+      ]);
+
+      if (!expRes.ok || !catRes.ok || !pmRes.ok) {
+        const failing = !expRes.ok ? expRes : !catRes.ok ? catRes : pmRes;
+        const errJson = await failing.json().catch(() => ({}));
+        throw new Error(errJson.error ?? "Failed to load data.");
+      }
+
+      const [expenses, cats, methods] = await Promise.all([
+        expRes.json(),
+        catRes.json(),
+        pmRes.json(),
+      ]);
+
+      setRawExpenses(expenses);
+      setCategoryRows(cats);
+      setPaymentMethodRows(methods);
+    } catch (err: unknown) {
+      setFetchError(err instanceof Error ? err.message : "Failed to load expenses.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  // ─── Derived display data ────────────────────────────────────────────────────
+  const expenses = useMemo(() => rawExpenses.map(toDisplay), [rawExpenses]);
 
   const categories = useMemo(() => [...new Set(categoryRows.map((c) => c.name))].sort(), [categoryRows]);
   const paymentMethods = useMemo(() => [...new Set(paymentMethodRows.map((m) => m.name))].sort(), [paymentMethodRows]);
@@ -97,26 +157,25 @@ export default function ExpensesTable({
   const statusOptions = ["All Statuses", "Verified", "Needs Review", "Pending", "Draft", "Missing Receipt"];
 
   const filtered = useMemo(() => {
-    return initialExpenses.filter((e) => {
+    return expenses.filter((e) => {
       if (category !== "All Categories" && e.category !== category) return false;
       if (method !== "All Methods" && e.paymentMethod !== method) return false;
       if (status !== "All Statuses" && e.status !== status) return false;
       return true;
     });
-  }, [initialExpenses, category, method, status]);
+  }, [expenses, category, method, status]);
 
   const total = filtered.reduce((s, e) => s + e.amount, 0);
-  const hasFilters =
-    category !== "All Categories" || method !== "All Methods" || status !== "All Statuses";
+  const hasFilters = category !== "All Categories" || method !== "All Methods" || status !== "All Statuses";
 
+  // ─── Actions ─────────────────────────────────────────────────────────────────
   function openCreate() {
     setEditTarget(undefined);
     setFormOpen(true);
   }
 
   function openEdit(id: string) {
-    const raw = rawExpenses.find((r) => r.id === id);
-    setEditTarget(raw);
+    setEditTarget(rawExpenses.find((r) => r.id === id));
     setFormOpen(true);
   }
 
@@ -125,19 +184,71 @@ export default function ExpensesTable({
     setDeleteTarget(expense);
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!deleteTarget) return;
-    startDeleteTransition(async () => {
-      const result = await deleteExpenseAction(deleteTarget.id);
-      if (result.error) {
-        setDeleteError(result.error);
-      } else {
-        setDeleteTarget(null);
-        router.refresh();
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/expenses/${deleteTarget.id}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 204) {
+        const json = await res.json().catch(() => ({}));
+        setDeleteError(json.error ?? "Delete failed.");
+        return;
       }
-    });
+      setDeleteTarget(null);
+      loadData();
+    } catch {
+      setDeleteError("Network error — please try again.");
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
+  // ─── Loading state ───────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="flex flex-col min-h-screen">
+        <Header
+          title="Expenses"
+          subtitle="Loading…"
+          action={
+            <button disabled className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-medium opacity-50">
+              <Plus className="w-3.5 h-3.5" />
+              Add Expense
+            </button>
+          }
+        />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+            <Loader2 className="w-6 h-6 animate-spin" />
+            <p className="text-sm">Loading expenses…</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Error state ─────────────────────────────────────────────────────────────
+  if (fetchError) {
+    return (
+      <div className="flex flex-col min-h-screen">
+        <Header title="Expenses" subtitle="Error loading data" />
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="max-w-sm w-full p-4 rounded-xl border border-red-200 bg-red-50 text-sm text-red-700 space-y-3">
+            <p className="font-medium">Failed to load expenses</p>
+            <p className="text-xs">{fetchError}</p>
+            <button
+              onClick={loadData}
+              className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Table ───────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col min-h-screen">
       <Header
@@ -163,11 +274,7 @@ export default function ExpensesTable({
           <FilterSelect options={statusOptions} value={status} onChange={setStatus} />
           {hasFilters && (
             <button
-              onClick={() => {
-                setCategory("All Categories");
-                setMethod("All Methods");
-                setStatus("All Statuses");
-              }}
+              onClick={() => { setCategory("All Categories"); setMethod("All Methods"); setStatus("All Statuses"); }}
               className="text-xs text-primary hover:underline font-medium ml-1"
             >
               Clear filters
@@ -211,8 +318,14 @@ export default function ExpensesTable({
                     ₹{e.amount.toLocaleString("en-IN")}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    {e.hasReceipt ? (
-                      <Receipt className="w-3.5 h-3.5 text-green-500 mx-auto" />
+                    {e.receiptPath ? (
+                      <button
+                        onClick={() => setPreviewReceipt({ path: e.receiptPath!, vendor: e.vendor })}
+                        title="View receipt"
+                        className="w-6 h-6 rounded-md flex items-center justify-center mx-auto text-green-500 hover:bg-green-50 hover:text-green-600 transition-colors"
+                      >
+                        <Receipt className="w-3.5 h-3.5" />
+                      </button>
                     ) : (
                       <span className="text-muted-foreground/40 text-xs">—</span>
                     )}
@@ -275,7 +388,18 @@ export default function ExpensesTable({
         expense={editTarget}
         categoryRows={categoryRows}
         paymentMethodRows={paymentMethodRows}
+        onSaved={loadData}
       />
+
+      {/* Receipt preview modal */}
+      {previewReceipt && (
+        <ReceiptPreviewModal
+          open={!!previewReceipt}
+          onOpenChange={(open) => { if (!open) setPreviewReceipt(null); }}
+          receiptPath={previewReceipt.path}
+          vendor={previewReceipt.vendor}
+        />
+      )}
 
       {/* Delete confirmation dialog */}
       <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
@@ -299,18 +423,18 @@ export default function ExpensesTable({
           </DialogBody>
           <DialogFooter>
             <button
-              disabled={isPendingDelete}
+              disabled={isDeleting}
               onClick={() => setDeleteTarget(null)}
               className="px-4 py-2 rounded-lg border border-border bg-white text-sm font-medium text-foreground hover:bg-muted disabled:opacity-60 transition-colors"
             >
               Cancel
             </button>
             <button
-              disabled={isPendingDelete}
+              disabled={isDeleting}
               onClick={handleDelete}
               className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-60 transition-colors"
             >
-              {isPendingDelete ? "Deleting…" : "Delete"}
+              {isDeleting ? "Deleting…" : "Delete"}
             </button>
           </DialogFooter>
         </DialogContent>

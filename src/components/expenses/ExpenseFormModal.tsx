@@ -1,7 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,11 +10,6 @@ import {
   DialogFooter,
   DialogCloseButton,
 } from "@/components/ui/dialog";
-import {
-  createExpenseAction,
-  updateExpenseAction,
-  type ExpenseActionState,
-} from "@/app/expenses/actions";
 import type { CategoryRow, PaymentMethodRow, ExpenseWithRefs } from "@/lib/supabase/types";
 
 interface Props {
@@ -24,6 +18,7 @@ interface Props {
   expense?: ExpenseWithRefs;
   categoryRows: CategoryRow[];
   paymentMethodRows: PaymentMethodRow[];
+  onSaved: () => void;
 }
 
 const EXPENSE_TYPES = [
@@ -40,15 +35,7 @@ const STATUSES = [
   { value: "missing_receipt", label: "Missing Receipt" },
 ];
 
-function FormField({
-  label,
-  required,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
+function FormField({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
       <label className="block text-xs font-medium text-foreground mb-1.5">
@@ -72,33 +59,62 @@ export default function ExpenseFormModal({
   expense,
   categoryRows,
   paymentMethodRows,
+  onSaved,
 }: Props) {
-  const router = useRouter();
   const isEdit = !!expense;
   const formRef = useRef<HTMLFormElement>(null);
+  const [isPending, setIsPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const action = isEdit ? updateExpenseAction : createExpenseAction;
-  const [state, formAction, isPending] = useActionState<ExpenseActionState | null, FormData>(
-    action,
-    null
-  );
-
-  // Close and refresh on success
-  useEffect(() => {
-    if (state?.success) {
-      onOpenChange(false);
-      router.refresh();
-    }
-  }, [state?.success]);
-
-  // Reset form when modal closes
   useEffect(() => {
     if (!open) {
+      setError(null);
       formRef.current?.reset();
     }
   }, [open]);
 
   const today = new Date().toISOString().split("T")[0];
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setIsPending(true);
+
+    const fd = new FormData(e.currentTarget);
+    const body = {
+      expense_date: (fd.get("expense_date") as string)?.trim(),
+      vendor: (fd.get("vendor") as string)?.trim(),
+      amount: fd.get("amount"),
+      category_id: fd.get("category_id"),
+      payment_method_id: fd.get("payment_method_id"),
+      expense_type: fd.get("expense_type"),
+      status: fd.get("status"),
+      description: (fd.get("description") as string)?.trim() || null,
+      invoice_number: (fd.get("invoice_number") as string)?.trim() || null,
+      notes: (fd.get("notes") as string)?.trim() || null,
+    };
+
+    try {
+      const url = isEdit ? `/api/expenses/${expense!.id}` : "/api/expenses";
+      const res = await fetch(url, {
+        method: isEdit ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error ?? "An error occurred.");
+      } else {
+        onOpenChange(false);
+        onSaved();
+      }
+    } catch {
+      setError("Network error — please try again.");
+    } finally {
+      setIsPending(false);
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -108,19 +124,14 @@ export default function ExpenseFormModal({
           <DialogCloseButton />
         </DialogHeader>
 
-        <form ref={formRef} action={formAction}>
-          {isEdit && (
-            <input type="hidden" name="expense_id" value={expense.id} />
-          )}
-
+        <form ref={formRef} onSubmit={handleSubmit}>
           <DialogBody className="space-y-4">
-            {state?.error && (
+            {error && (
               <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700">
-                {state.error}
+                {error}
               </div>
             )}
 
-            {/* Row 1: Date + Vendor */}
             <div className="grid grid-cols-2 gap-3">
               <FormField label="Date" required>
                 <input
@@ -145,13 +156,10 @@ export default function ExpenseFormModal({
               </FormField>
             </div>
 
-            {/* Row 2: Amount + Currency (fixed) */}
             <div className="grid grid-cols-2 gap-3">
               <FormField label="Amount" required>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                    ₹
-                  </span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
                   <input
                     type="number"
                     name="amount"
@@ -177,7 +185,6 @@ export default function ExpenseFormModal({
               </FormField>
             </div>
 
-            {/* Row 3: Category + Payment Method */}
             <div className="grid grid-cols-2 gap-3">
               <FormField label="Category" required>
                 <select
@@ -189,9 +196,7 @@ export default function ExpenseFormModal({
                 >
                   <option value="">Select…</option>
                   {categoryRows.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
+                    <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
               </FormField>
@@ -205,15 +210,12 @@ export default function ExpenseFormModal({
                 >
                   <option value="">Select…</option>
                   {paymentMethodRows.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
+                    <option key={m.id} value={m.id}>{m.name}</option>
                   ))}
                 </select>
               </FormField>
             </div>
 
-            {/* Row 4: Type + Status */}
             <div className="grid grid-cols-2 gap-3">
               <FormField label="Type" required>
                 <select
@@ -224,9 +226,7 @@ export default function ExpenseFormModal({
                   className={selectCls}
                 >
                   {EXPENSE_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
-                    </option>
+                    <option key={t.value} value={t.value}>{t.label}</option>
                   ))}
                 </select>
               </FormField>
@@ -239,15 +239,12 @@ export default function ExpenseFormModal({
                   className={selectCls}
                 >
                   {STATUSES.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {s.label}
-                    </option>
+                    <option key={s.value} value={s.value}>{s.label}</option>
                   ))}
                 </select>
               </FormField>
             </div>
 
-            {/* Row 5: Invoice Number */}
             <FormField label="Invoice Number">
               <input
                 type="text"
@@ -259,7 +256,6 @@ export default function ExpenseFormModal({
               />
             </FormField>
 
-            {/* Row 6: Notes */}
             <FormField label="Notes">
               <textarea
                 name="notes"
@@ -286,13 +282,7 @@ export default function ExpenseFormModal({
               disabled={isPending}
               className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 disabled:opacity-60 transition-colors"
             >
-              {isPending
-                ? isEdit
-                  ? "Saving…"
-                  : "Adding…"
-                : isEdit
-                ? "Save Changes"
-                : "Add Expense"}
+              {isPending ? (isEdit ? "Saving…" : "Adding…") : isEdit ? "Save Changes" : "Add Expense"}
             </button>
           </DialogFooter>
         </form>

@@ -43,7 +43,7 @@ create table if not exists expenses (
   status             expense_status not null default 'draft',
   receipt_file_path  text,
   invoice_number     text,
-  ai_confidence      smallint check (ai_confidence between 0 and 100),
+  ai_confidence      numeric(4,3) check (ai_confidence is null or (ai_confidence >= 0 and ai_confidence <= 1)),
   raw_ai_json        jsonb,
   notes              text,
   created_at         timestamptz not null default now(),

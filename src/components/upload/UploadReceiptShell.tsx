@@ -1,0 +1,867 @@
+"use client";
+
+import { useState, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
+import Header from "@/components/Header";
+import {
+  Upload,
+  FileImage,
+  FileText,
+  CheckCircle,
+  AlertCircle,
+  Save,
+  X,
+  ExternalLink,
+  Sparkles,
+  Loader2,
+  Info,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  uploadReceiptFile,
+  getReceiptSignedUrl,
+  deleteReceiptFile,
+  validateReceiptFile,
+} from "@/lib/supabase/storage";
+import { saveReceiptExpenseAction } from "@/app/upload/actions";
+import { extractReceiptAction } from "@/app/upload/extract-receipt";
+import { createClient } from "@/lib/supabase/client";
+import type { CategoryRow, PaymentMethodRow } from "@/lib/supabase/types";
+import type { ExtractionResult } from "@/lib/openai/extract";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type Phase = "idle" | "uploading" | "ready" | "extracting" | "saving" | "saved";
+
+interface UploadedFile {
+  file: File;
+  path: string;
+  signedUrl: string;
+  isImage: boolean;
+}
+
+interface FormFields {
+  expense_date: string;
+  vendor: string;
+  amount: string;
+  category_id: string;
+  payment_method_id: string;
+  status: string;
+  description: string;
+  invoice_number: string;
+  notes: string;
+  currency: string;
+}
+
+interface Props {
+  categoryRows: CategoryRow[];
+  paymentMethodRows: PaymentMethodRow[];
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const STATUSES = [
+  { value: "needs_review", label: "Needs Review" },
+  { value: "verified", label: "Verified" },
+  { value: "draft", label: "Draft" },
+];
+
+const CONFIDENCE_THRESHOLD = 0.85;
+
+const inputCls =
+  "w-full h-9 px-3 text-sm rounded-lg border border-border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors disabled:opacity-60";
+
+const inputHighlightCls =
+  "w-full h-9 px-3 text-sm rounded-lg border border-amber-300 bg-amber-50/40 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-300/40 focus:border-amber-400 transition-colors disabled:opacity-60";
+
+const selectCls =
+  "w-full h-9 px-3 text-sm rounded-lg border border-border bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors disabled:opacity-60 appearance-none cursor-pointer";
+
+const selectHighlightCls =
+  "w-full h-9 px-3 text-sm rounded-lg border border-amber-300 bg-amber-50/40 text-foreground focus:outline-none focus:ring-2 focus:ring-amber-300/40 focus:border-amber-400 transition-colors disabled:opacity-60 appearance-none cursor-pointer";
+
+function FormField({
+  label,
+  required,
+  needsReview,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  needsReview?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="flex items-center gap-1 text-xs font-medium text-foreground mb-1.5">
+        {label}
+        {required && <span className="text-red-500 ml-0.5">*</span>}
+        {needsReview && (
+          <span className="ml-1 text-[10px] font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded px-1 py-0.5">
+            Review
+          </span>
+        )}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+// ─── Shell ────────────────────────────────────────────────────────────────────
+
+export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: Props) {
+  const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
+  const today = new Date().toISOString().split("T")[0];
+
+  // ── Phase & file state ────────────────────────────────────────────────────
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [dragging, setDragging] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [uploaded, setUploaded] = useState<UploadedFile | null>(null);
+
+  // ── AI state ──────────────────────────────────────────────────────────────
+  const [aiData, setAiData] = useState<ExtractionResult | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  // ── Controlled form fields ────────────────────────────────────────────────
+  const [fields, setFields] = useState<FormFields>({
+    expense_date: today,
+    vendor: "",
+    amount: "",
+    category_id: "",
+    payment_method_id: "",
+    status: "needs_review",
+    description: "",
+    invoice_number: "",
+    notes: "",
+    currency: "INR",
+  });
+
+  function setField(name: keyof FormFields, value: string) {
+    setFields((prev) => ({ ...prev, [name]: value }));
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  /** Returns true if the given field name is in AI's fields_needing_review */
+  function needsReview(fieldName: string): boolean {
+    return !!aiData?.fields_needing_review.includes(fieldName);
+  }
+
+  function inputClass(fieldName: string): string {
+    return aiData && needsReview(fieldName) ? inputHighlightCls : inputCls;
+  }
+
+  function selectClass(fieldName: string): string {
+    return aiData && needsReview(fieldName) ? selectHighlightCls : selectCls;
+  }
+
+  // ── File processing ───────────────────────────────────────────────────────
+
+  async function processFile(file: File) {
+    setUploadError(null);
+    setSaveError(null);
+    setAiData(null);
+    setAiError(null);
+
+    const validationError = validateReceiptFile(file);
+    if (validationError) {
+      setUploadError(validationError);
+      return;
+    }
+
+    setPhase("uploading");
+
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setUploadError("You must be signed in to upload receipts.");
+      setPhase("idle");
+      return;
+    }
+
+    const uploadResult = await uploadReceiptFile(user.id, file);
+    if (uploadResult.error || !uploadResult.path) {
+      setUploadError(uploadResult.error ?? "Upload failed.");
+      setPhase("idle");
+      return;
+    }
+
+    const urlResult = await getReceiptSignedUrl(uploadResult.path);
+    if (urlResult.error) {
+      console.warn("[UploadReceiptShell] Could not get signed URL:", urlResult.error);
+    }
+
+    setUploaded({
+      file,
+      path: uploadResult.path,
+      signedUrl: urlResult.signedUrl ?? "",
+      isImage: file.type.startsWith("image/"),
+    });
+
+    // Reset form fields to blank (keep today's date)
+    setFields({
+      expense_date: today,
+      vendor: "",
+      amount: "",
+      category_id: "",
+      payment_method_id: "",
+      status: "needs_review",
+      description: "",
+      invoice_number: "",
+      notes: "",
+      currency: "INR",
+    });
+
+    setPhase("ready");
+  }
+
+  // ── Drag & drop ───────────────────────────────────────────────────────────
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) processFile(file);
+  }, []);
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+    e.target.value = "";
+  };
+
+  // ── AI extraction ─────────────────────────────────────────────────────────
+
+  async function handleExtract() {
+    if (!uploaded) return;
+    setAiError(null);
+    setAiData(null);
+    setPhase("extracting");
+
+    const result = await extractReceiptAction(
+      uploaded.path,
+      categoryRows.map((c) => c.name),
+      paymentMethodRows.map((m) => m.name)
+    );
+
+    if (result.error || !result.data) {
+      setAiError(result.error ?? "Extraction failed. Please enter details manually.");
+      setPhase("ready");
+      return;
+    }
+
+    const ai = result.data;
+    setAiData(ai);
+
+    // Match category / payment method by name (case-insensitive)
+    const matchedCat = categoryRows.find(
+      (c) => c.name.toLowerCase() === ai.category_guess?.toLowerCase()
+    );
+    const matchedMethod = paymentMethodRows.find(
+      (m) => m.name.toLowerCase() === ai.payment_method_guess?.toLowerCase()
+    );
+
+    setFields({
+      expense_date: ai.expense_date ?? today,
+      vendor: ai.vendor ?? "",
+      amount: ai.amount !== null ? String(ai.amount) : "",
+      category_id: matchedCat ? String(matchedCat.id) : "",
+      payment_method_id: matchedMethod ? String(matchedMethod.id) : "",
+      // Low confidence → needs_review; high confidence → verified (user can change)
+      status: ai.confidence >= CONFIDENCE_THRESHOLD ? "verified" : "needs_review",
+      description: ai.description ?? "",
+      invoice_number: ai.invoice_number ?? "",
+      notes: "",
+      currency: ai.currency ?? "INR",
+    });
+
+    setPhase("ready");
+  }
+
+  // ── Save ──────────────────────────────────────────────────────────────────
+
+  async function handleSave(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!uploaded) return;
+
+    setSaveError(null);
+    setPhase("saving");
+
+    const formData = new FormData(e.currentTarget);
+    const result = await saveReceiptExpenseAction(null, formData);
+
+    if (result.error) {
+      setSaveError(result.error);
+      setPhase("ready");
+      return;
+    }
+
+    setPhase("saved");
+  }
+
+  // ── Clear ─────────────────────────────────────────────────────────────────
+
+  async function handleClear() {
+    if (uploaded?.path) {
+      deleteReceiptFile(uploaded.path).catch(() => {});
+    }
+    setUploaded(null);
+    setUploadError(null);
+    setSaveError(null);
+    setAiData(null);
+    setAiError(null);
+    setPhase("idle");
+    setFields({
+      expense_date: today,
+      vendor: "",
+      amount: "",
+      category_id: "",
+      payment_method_id: "",
+      status: "needs_review",
+      description: "",
+      invoice_number: "",
+      notes: "",
+      currency: "INR",
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const isFormDisabled = phase === "saving" || phase === "extracting";
+
+  return (
+    <div className="flex flex-col min-h-screen">
+      <Header
+        title="Upload Receipt"
+        subtitle="Upload a receipt and review expense details"
+      />
+
+      <div className="p-6 flex-1">
+        {/* ── Success state ── */}
+        {phase === "saved" && (
+          <div className="max-w-md mx-auto mt-16 text-center space-y-4">
+            <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center mx-auto">
+              <CheckCircle className="w-8 h-8 text-green-600" />
+            </div>
+            <p className="text-lg font-semibold text-foreground">Expense saved!</p>
+            <p className="text-sm text-muted-foreground">
+              Your receipt expense has been added successfully.
+            </p>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                onClick={() => router.push("/expenses")}
+                className="px-5 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors"
+              >
+                Go to Expenses
+              </button>
+              <button
+                onClick={() => {
+                  setUploaded(null);
+                  setAiData(null);
+                  setAiError(null);
+                  setSaveError(null);
+                  setPhase("idle");
+                  setFields({
+                    expense_date: today,
+                    vendor: "",
+                    amount: "",
+                    category_id: "",
+                    payment_method_id: "",
+                    status: "needs_review",
+                    description: "",
+                    invoice_number: "",
+                    notes: "",
+                    currency: "INR",
+                  });
+                }}
+                className="px-5 py-2 rounded-lg border border-border bg-white text-sm font-medium text-foreground hover:bg-muted transition-colors"
+              >
+                Upload Another
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Main 2-col layout ── */}
+        {phase !== "saved" && (
+          <div className="grid grid-cols-5 gap-5 h-full">
+            {/* Left: Upload Zone + Preview */}
+            <div className="col-span-2 flex flex-col gap-4">
+              {/* Upload Zone */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (phase === "idle") setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={handleDrop}
+                className={cn(
+                  "flex flex-col items-center justify-center rounded-xl border-2 border-dashed transition-all min-h-[200px] p-6 text-center",
+                  phase === "idle"
+                    ? dragging
+                      ? "border-primary bg-accent scale-[1.01] cursor-copy"
+                      : "border-border bg-white hover:border-primary/50 hover:bg-accent/30 cursor-pointer"
+                    : phase === "uploading"
+                    ? "border-primary/40 bg-primary/5 cursor-default"
+                    : "border-green-300 bg-green-50/50 cursor-default"
+                )}
+                onClick={() => {
+                  if (phase === "idle") document.getElementById("file-input")?.click();
+                }}
+              >
+                <input
+                  id="file-input"
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
+                  className="hidden"
+                  onChange={handleFileInput}
+                />
+
+                {phase === "idle" && (
+                  <>
+                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
+                      <Upload className="w-6 h-6 text-primary" />
+                    </div>
+                    <p className="text-sm font-semibold text-foreground mb-1">
+                      Drop receipt here
+                    </p>
+                    <p className="text-xs text-muted-foreground">or click to browse</p>
+                    <p className="text-[11px] text-muted-foreground mt-2">
+                      JPG, PNG, WebP, PDF · max 10 MB
+                    </p>
+                    {uploadError && (
+                      <div className="mt-3 flex items-center gap-1.5 text-xs text-red-600">
+                        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                        {uploadError}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {phase === "uploading" && (
+                  <>
+                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
+                      <Upload className="w-6 h-6 text-primary" />
+                    </div>
+                    <p className="text-sm font-semibold text-foreground mb-1">Uploading…</p>
+                    <p className="text-xs text-muted-foreground">Please wait</p>
+                  </>
+                )}
+
+                {(phase === "ready" ||
+                  phase === "extracting" ||
+                  phase === "saving") &&
+                  uploaded && (
+                    <>
+                      <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center mb-3">
+                        <CheckCircle className="w-6 h-6 text-green-600" />
+                      </div>
+                      <p className="text-sm font-semibold text-foreground mb-1">
+                        Upload complete
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate max-w-[160px]">
+                        {uploaded.file.name}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleClear();
+                        }}
+                        className="mt-3 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                        Replace file
+                      </button>
+                    </>
+                  )}
+              </div>
+
+              {/* Receipt Preview */}
+              <div className="bg-white rounded-xl border border-border shadow-sm p-4 flex flex-col items-center justify-center min-h-[200px] flex-1">
+                {!uploaded ? (
+                  <div className="text-center">
+                    <FileImage className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                    <p className="text-xs text-muted-foreground">
+                      Receipt preview will appear here
+                    </p>
+                  </div>
+                ) : uploaded.isImage ? (
+                  <div className="w-full h-full flex flex-col gap-2">
+                    <p className="text-xs font-semibold text-foreground">Receipt Preview</p>
+                    {uploaded.signedUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={uploaded.signedUrl}
+                        alt={uploaded.file.name}
+                        className="w-full rounded-lg object-contain max-h-[280px] border border-border"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-32 rounded-lg bg-muted text-xs text-muted-foreground">
+                        Preview unavailable
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center space-y-3">
+                    <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center mx-auto">
+                      <FileText className="w-6 h-6 text-red-500" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-foreground truncate max-w-[180px]">
+                        {uploaded.file.name}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {(uploaded.file.size / 1024).toFixed(0)} KB
+                      </p>
+                    </div>
+                    {uploaded.signedUrl && (
+                      <a
+                        href={uploaded.signedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        Open PDF
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right: Expense Details Form */}
+            <div className="col-span-3">
+              <div className="bg-white rounded-xl border border-border shadow-sm h-full flex flex-col">
+                {/* Panel header */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-primary" />
+                    <p className="text-sm font-semibold text-foreground">Expense Details</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {uploaded && (
+                      <span className="text-[11px] text-muted-foreground truncate max-w-[140px]">
+                        {uploaded.file.name}
+                      </span>
+                    )}
+                    {/* Extract with AI button */}
+                    {(phase === "ready" || phase === "extracting") && uploaded && (
+                      <button
+                        type="button"
+                        disabled={phase === "extracting"}
+                        onClick={handleExtract}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium hover:bg-violet-700 disabled:opacity-60 transition-colors"
+                      >
+                        {phase === "extracting" ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            Extracting…
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Extract with AI
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex-1 p-5 overflow-y-auto">
+                  {/* Empty / uploading placeholder */}
+                  {(phase === "idle" || phase === "uploading") && (
+                    <div className="h-full flex flex-col items-center justify-center text-center">
+                      <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center mb-3">
+                        <Upload className="w-5 h-5 text-muted-foreground/50" />
+                      </div>
+                      <p className="text-sm text-muted-foreground font-medium">
+                        {phase === "uploading"
+                          ? "Uploading receipt…"
+                          : "Upload a receipt to get started"}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {phase === "uploading"
+                          ? "Please wait"
+                          : "Then extract with AI or enter details manually"}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Extracting overlay */}
+                  {phase === "extracting" && (
+                    <div className="h-full flex flex-col items-center justify-center text-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-violet-50 flex items-center justify-center">
+                        <Sparkles className="w-6 h-6 text-violet-500 animate-pulse" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">
+                          Extracting receipt details…
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          This usually takes a few seconds
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Form (ready / saving) */}
+                  {(phase === "ready" || phase === "saving") && (
+                    <form ref={formRef} onSubmit={handleSave} className="space-y-4">
+                      {/* Hidden fields */}
+                      <input type="hidden" name="receipt_file_path" value={uploaded?.path ?? ""} />
+                      <input type="hidden" name="currency" value={fields.currency} />
+                      {aiData && (
+                        <>
+                          <input
+                            type="hidden"
+                            name="raw_ai_json"
+                            value={JSON.stringify(aiData)}
+                          />
+                          <input
+                            type="hidden"
+                            name="ai_confidence"
+                            value={String(aiData.confidence)}
+                          />
+                        </>
+                      )}
+
+                      {/* AI result banner */}
+                      {aiData && (
+                        <div className="p-3 rounded-lg bg-violet-50 border border-violet-200 flex items-start gap-2.5">
+                          <Sparkles className="w-3.5 h-3.5 text-violet-500 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-xs font-medium text-violet-800">
+                                AI extracted receipt details
+                              </p>
+                              <span
+                                className={cn(
+                                  "text-[10px] font-semibold px-1.5 py-0.5 rounded border",
+                                  aiData.confidence >= CONFIDENCE_THRESHOLD
+                                    ? "bg-green-50 text-green-700 border-green-200"
+                                    : "bg-amber-50 text-amber-700 border-amber-200"
+                                )}
+                              >
+                                {Math.round(aiData.confidence * 100)}% confidence
+                              </span>
+                            </div>
+                            {aiData.fields_needing_review.length > 0 && (
+                              <p className="text-[11px] text-violet-700 mt-0.5">
+                                Review highlighted fields before saving.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* AI error banner */}
+                      {aiError && (
+                        <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2 text-xs text-amber-800">
+                          <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                          <span>
+                            <strong>AI extraction failed:</strong> {aiError} You can still
+                            enter details manually below.
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Save error banner */}
+                      {saveError && (
+                        <div className="p-3 rounded-lg bg-red-50 border border-red-200 flex items-start gap-2 text-xs text-red-700">
+                          <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                          {saveError}
+                        </div>
+                      )}
+
+                      {/* Row 1: Date + Vendor */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <FormField label="Date" required needsReview={needsReview("expense_date")}>
+                          <input
+                            type="date"
+                            name="expense_date"
+                            required
+                            disabled={isFormDisabled}
+                            value={fields.expense_date}
+                            onChange={(e) => setField("expense_date", e.target.value)}
+                            className={inputClass("expense_date")}
+                          />
+                        </FormField>
+                        <FormField label="Vendor" required needsReview={needsReview("vendor")}>
+                          <input
+                            type="text"
+                            name="vendor"
+                            required
+                            disabled={isFormDisabled}
+                            value={fields.vendor}
+                            onChange={(e) => setField("vendor", e.target.value)}
+                            placeholder="e.g. Amazon"
+                            className={inputClass("vendor")}
+                          />
+                        </FormField>
+                      </div>
+
+                      {/* Row 2: Amount + Category */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <FormField label="Amount" required needsReview={needsReview("amount")}>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                              {fields.currency === "INR" ? "₹" : fields.currency}
+                            </span>
+                            <input
+                              type="number"
+                              name="amount"
+                              required
+                              min="0"
+                              step="0.01"
+                              disabled={isFormDisabled}
+                              value={fields.amount}
+                              onChange={(e) => setField("amount", e.target.value)}
+                              placeholder="0.00"
+                              className={inputClass("amount") + " pl-7"}
+                            />
+                          </div>
+                        </FormField>
+                        <FormField
+                          label="Category"
+                          needsReview={needsReview("category_guess")}
+                        >
+                          <select
+                            name="category_id"
+                            disabled={isFormDisabled}
+                            value={fields.category_id}
+                            onChange={(e) => setField("category_id", e.target.value)}
+                            className={selectClass("category_guess")}
+                          >
+                            <option value="">Select…</option>
+                            {categoryRows.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </select>
+                        </FormField>
+                      </div>
+
+                      {/* Row 3: Payment Method + Status */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <FormField
+                          label="Payment Method"
+                          needsReview={needsReview("payment_method_guess")}
+                        >
+                          <select
+                            name="payment_method_id"
+                            disabled={isFormDisabled}
+                            value={fields.payment_method_id}
+                            onChange={(e) => setField("payment_method_id", e.target.value)}
+                            className={selectClass("payment_method_guess")}
+                          >
+                            <option value="">Select…</option>
+                            {paymentMethodRows.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.name}
+                              </option>
+                            ))}
+                          </select>
+                        </FormField>
+                        <FormField label="Status">
+                          <select
+                            name="status"
+                            disabled={isFormDisabled}
+                            value={fields.status}
+                            onChange={(e) => setField("status", e.target.value)}
+                            className={selectCls}
+                          >
+                            {STATUSES.map((s) => (
+                              <option key={s.value} value={s.value}>
+                                {s.label}
+                              </option>
+                            ))}
+                          </select>
+                        </FormField>
+                      </div>
+
+                      {/* Row 4: Description */}
+                      <FormField
+                        label="Description"
+                        needsReview={needsReview("description")}
+                      >
+                        <input
+                          type="text"
+                          name="description"
+                          disabled={isFormDisabled}
+                          value={fields.description}
+                          onChange={(e) => setField("description", e.target.value)}
+                          placeholder="Optional"
+                          className={inputClass("description")}
+                        />
+                      </FormField>
+
+                      {/* Row 5: Invoice Number */}
+                      <FormField
+                        label="Invoice Number"
+                        needsReview={needsReview("invoice_number")}
+                      >
+                        <input
+                          type="text"
+                          name="invoice_number"
+                          disabled={isFormDisabled}
+                          value={fields.invoice_number}
+                          onChange={(e) => setField("invoice_number", e.target.value)}
+                          placeholder="Optional"
+                          className={inputClass("invoice_number")}
+                        />
+                      </FormField>
+
+                      {/* Row 6: Notes */}
+                      <FormField label="Notes">
+                        <textarea
+                          name="notes"
+                          rows={2}
+                          disabled={isFormDisabled}
+                          value={fields.notes}
+                          onChange={(e) => setField("notes", e.target.value)}
+                          placeholder="Optional"
+                          className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors resize-none disabled:opacity-60"
+                        />
+                      </FormField>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="submit"
+                          disabled={isFormDisabled}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 disabled:opacity-60 transition-colors"
+                        >
+                          <Save className="w-3.5 h-3.5" />
+                          {phase === "saving" ? "Saving…" : "Save Expense"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isFormDisabled}
+                          onClick={handleClear}
+                          className="ml-auto text-xs text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

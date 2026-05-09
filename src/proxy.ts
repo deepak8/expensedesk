@@ -42,13 +42,22 @@ export async function proxy(request: NextRequest) {
   );
 
   // getUser() validates the JWT on Supabase — do not use getSession() here.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Wrap in try/catch: a cold-start ETIMEDOUT must not become an uncaughtException
+  // that kills the dev server process. On network error, treat as unauthenticated.
+  let user: { id: string } | null = null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch (err) {
+    console.error("[proxy] supabase.auth.getUser() failed — treating as unauthenticated:", err);
+  }
 
   const { pathname } = request.nextUrl;
 
-  if (!user && pathname !== "/sign-in") {
+  // Allow the sign-in API route without auth (it IS the auth endpoint).
+  const isAuthRoute = pathname === "/sign-in" || pathname.startsWith("/api/auth/");
+
+  if (!user && !isAuthRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/sign-in";
     return NextResponse.redirect(url);
