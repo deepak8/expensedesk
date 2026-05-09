@@ -2,7 +2,7 @@
 
 ## Product Summary
 
-ExpenseDesk is a polished small-business expense management web app. It helps businesses capture receipts, review AI-extracted expense details, manually add business expenses, track salary payments, and review month-on-month spending.
+ExpenseDesk is a small-business expense management web app. It helps businesses capture receipts and invoices, review AI-extracted expense details, manually add business expenses, track salary payments, manage invoice payment status, and review month-on-month spending.
 
 It is **not** a full accounting platform, payroll system, or GST/tax tool.
 
@@ -12,167 +12,215 @@ It is **not** a full accounting platform, payroll system, or GST/tax tool.
 
 | Layer | Technology |
 |---|---|
-| Framework | Next.js 16.2.6 (App Router, Turbopack) |
+| Framework | Next.js 16.2.6 (App Router) |
+| Bundler | Turbopack (dev), webpack (production build via `--webpack` flag) |
 | Language | TypeScript |
-| Styling | Tailwind CSS |
+| Styling | Tailwind CSS v4 |
 | Charts | Recharts |
 | Auth & DB | Supabase (PostgreSQL + Auth + Storage) |
-| AI extraction | OpenAI (GPT-4o via chat completions) |
+| AI extraction | OpenAI GPT-4o (chat completions with vision) |
 | Icons | Lucide React |
 | Deployment target | Vercel (not yet deployed) |
 
 ---
 
-## Completed Phases
+## Current Implemented Features
 
-### Phase 0 — Polished Frontend Shell
-- Built full UI with mock data: dashboard, expenses table, salary page, sidebar navigation
-- Established design tokens, component structure, and layout patterns
+### Authentication
+- Supabase email/password authentication
+- Sign-in page: `src/app/sign-in/page.tsx` (client component, `fetch`-based)
+- Sign-in API: `POST /api/auth/sign-in`
+- Session managed via Supabase SSR cookies
+- Protected routes via `src/proxy.ts` (Next.js 16 renamed `middleware.ts` to `proxy.ts`)
+- Unauthenticated requests redirected to `/sign-in`
+- `/sign-in` and `/api/auth/*` bypass auth checking entirely (avoids Supabase cold-start issues)
 
-### Phase 1A — Supabase Schema, Seed Data, Live Reads
-- Created `expenses`, `categories`, and `payment_methods` tables in Supabase
-- Seeded categories and payment methods
-- Wired dashboard and expense list to live Supabase reads
+### Dashboard
+- Server component at `src/app/page.tsx`
+- Reads live expense data from Supabase for the current month
+- Derives summary cards, category split, payment method split, top vendors, and needs-review list
+- Falls back to mock data if Supabase fetch fails
 
-### Phase 1B — Authentication and Expense CRUD
-- Email/password sign-in via Supabase Auth
-- Protected all app routes via middleware proxy
+### Expenses List
+- Client component at `src/components/expenses/ExpensesTable.tsx`
+- Self-fetching: loads expenses, categories, and payment methods via `fetch` to API routes
+- Filtering by category, payment method, status, expense type, and payment status
+- 10-column table: Date, Vendor, Description, Amount, Category, Payment, Docs, Payment Status, Status, Actions
+
+### Expense CRUD
 - Add, edit, and delete expenses via API route handlers
-- Converted sign-in from server action to `fetch` → `/api/auth/sign-in`
+- `ExpenseFormModal` handles add/edit with all fields including Phase 3C fields
+- All CRUD is via `fetch` to API routes (no server actions for expenses)
 
-### Phase 1C — Salary Page backed by Supabase
-- Salary entries stored as expenses with `expense_type = 'salary'`
-- Salary page reads and displays live data filtered by type
+### Salary Expenses
+- Stored as expenses with `expense_type = 'salary'`
+- Dedicated salary page at `/salary` reads and displays salary-type expenses
 
-### Phase 2A — Receipt Upload to Private Supabase Storage
-- Private `receipts` storage bucket created in Supabase
-- Upload flow: file picker → preview → confirm → store in Supabase Storage
+### Receipt/Invoice Upload to Supabase Storage
+- Private `receipts` storage bucket in Supabase
+- Upload flow: file picker with drag-and-drop, client-side preview, server-side upload
 - File path convention: `{userId}/{yyyy-mm}/{timestamp}-{safe-filename}`
 - `receipt_file_path` column stores the private bucket path (not a public URL)
+- Upload page includes document type selection (Invoice/Bill vs Receipt/Payment Proof)
 
-### Phase 2B — Receipt Preview from Expenses Page
-- Signed URLs generated server-side for receipt preview
+### Receipt/Invoice Preview
+- Signed URLs generated server-side for preview
 - `ReceiptPreviewModal` displays images inline and PDFs via `<iframe>`
 - Dynamically imported (`ssr: false`) to avoid heavy chunks in initial load
+- Supports optional `label` prop (shows "Invoice" or "Receipt" in title)
 
-### Phase 3A — OpenAI Receipt Extraction
-- Receipt images/PDFs sent to OpenAI GPT-4o via chat completions API
-- Extracted fields: merchant, amount, currency, date, category, payment method, description
+### OpenAI Receipt/Invoice Extraction
+- Receipt/invoice images sent to OpenAI GPT-4o via chat completions with vision input
+- Extracted fields: vendor, amount, currency, date, due_date, category guess, payment method guess, description, invoice number
 - AI output prefills the expense review form
-- User must review and confirm before saving
-- `raw_ai_json` stored compactly on the expense row
+- User must review and confirm before saving (no auto-save)
+- `raw_ai_json` stored compactly on the expense row (JSONB)
 - `ai_confidence` stored as `numeric(4,3)` (value between 0 and 1)
-- Manual save is always required — AI output is never auto-saved
+
+### Invoice vs Payment Proof Workflow (Phase 3C)
+- Upload page shows document type selector after file upload: "Invoice / Bill" vs "Receipt / Payment Proof"
+- Invoice uploads:
+  - `document_type = 'invoice'`, `expense_type = 'invoice'`
+  - `payment_status = 'unpaid'`
+  - Shows orange "This invoice will be saved as unpaid" banner
+  - Due Date field shown, Payment Method hidden
+  - Save button reads "Save as Unpaid Invoice"
+- Receipt/payment proof uploads:
+  - `document_type = 'receipt'` or `'payment_proof'`
+  - `payment_status = 'paid'`
+  - `payment_date` and `paid_amount` auto-derived from expense date and amount
+- Mark Paid modal (`MarkPaidModal.tsx`):
+  - Triggered from "Mark Paid" button in Expenses table for unpaid/partially_paid expenses
+  - Fields: Payment Date, Paid Amount, Payment Method, Payment Reference, Payment Proof upload, Notes
+  - Calls `PATCH /api/expenses/[id]/mark-paid`
+  - Auto-determines `paid` vs `partially_paid` based on paid_amount vs expense amount
+- Payment status column in Expenses table with colored badges (green/orange/amber)
+- Docs column shows invoice icon (FileText) vs receipt icon based on document_type
 
 ---
 
-## Current Working Features
+## Current Database Model
 
-- Email/password sign-in
-- Protected app routes (unauthenticated users redirected to `/sign-in`)
-- Dashboard with live spend data and charts
-- Expenses list from live Supabase data
-- Add, edit, and delete expenses
-- Salary expenses stored and displayed as a separate page
-- Upload receipt image or PDF
-- Preview receipt during upload (before saving)
-- Save receipt expense manually after upload
-- View saved receipt from the Expenses table
-- Inline PDF and image receipt preview modal
-- Extract receipt fields with AI (OpenAI GPT-4o)
-- Prefill expense review form from AI extraction
-- Manual review required before saving AI output
-- Compact `raw_ai_json` and `ai_confidence` saved on expense row
+### Tables
+- `expenses` — main expense records (see column list below)
+- `categories` — lookup table (id, name) with seeded values
+- `payment_methods` — lookup table (id, name) with seeded values
 
----
+### Expenses Table Columns
 
-## Architecture Summary
-
-### Routing and Middleware
-- `src/middleware.ts` delegates to `src/proxy.ts`
-- `proxy.ts` validates the Supabase session via `getUser()` on every request
-- Unauthenticated requests are redirected to `/sign-in`
-- `/sign-in` and `/api/auth/*` are whitelisted (no auth required)
-
-### Page Architecture
-- `src/app/expenses/page.tsx` — lightweight shell, renders `<ExpensesTable />`
-- `src/app/dashboard/page.tsx` — server component, reads live data
-- `src/app/salary/page.tsx` — server component, reads salary-type expenses
-
-### API Routes
-| Route | Methods | Purpose |
+| Column | Type | Notes |
 |---|---|---|
-| `/api/auth/sign-in` | POST | Supabase email/password sign-in |
-| `/api/expenses` | GET, POST | List and create expenses |
-| `/api/expenses/[id]` | PATCH, DELETE | Update and delete an expense |
-| `/api/categories` | GET | List categories |
-| `/api/payment-methods` | GET | List payment methods |
-| `/api/receipts/upload` | POST | Upload receipt to Supabase Storage |
-| `/api/receipts/signed-url` | GET | Generate signed URL for receipt preview |
-| `/api/receipts/extract` | POST | Send receipt to OpenAI, return extracted fields |
+| `id` | uuid (PK) | Auto-generated |
+| `expense_date` | date | Required |
+| `vendor` | text | Required |
+| `description` | text | Optional |
+| `amount` | numeric(12,2) | Required, >= 0 |
+| `currency` | char(3) | Default 'INR' |
+| `category_id` | integer (FK) | References categories |
+| `payment_method_id` | integer (FK) | References payment_methods |
+| `expense_type` | enum | manual, receipt, salary, reimbursement, invoice |
+| `status` | enum | draft, needs_review, verified, missing_receipt |
+| `receipt_file_path` | text | Private storage path |
+| `invoice_number` | text | Optional |
+| `ai_confidence` | numeric(4,3) | 0-1, nullable |
+| `raw_ai_json` | jsonb | Compact AI extraction output |
+| `notes` | text | Optional |
+| `document_type` | text | invoice, receipt, payment_proof, manual, salary |
+| `payment_status` | text | unpaid, partially_paid, paid |
+| `due_date` | date | For invoices |
+| `payment_date` | date | When paid |
+| `paid_amount` | numeric(12,2) | Amount paid |
+| `payment_reference` | text | Payment reference/transaction ID |
+| `payment_proof_file_path` | text | Path to payment proof in storage |
+| `created_at` | timestamptz | Auto-set |
+| `updated_at` | timestamptz | Auto-updated via trigger |
 
-### Client Components
-- `ExpensesTable` — self-fetching; loads expenses, categories, and payment methods on mount via `Promise.all`
-- `ExpenseFormModal` — dynamically imported; handles add/edit via `fetch` (no server actions)
-- `ReceiptPreviewModal` — dynamically imported; displays image or PDF via signed URL
+### Enums
+- `expense_type`: manual, receipt, salary, reimbursement (+ 'invoice' added via ALTER TYPE)
+- `expense_status`: draft, needs_review, verified, missing_receipt
 
-### Server Supabase Client
-- `src/lib/supabase/server.ts` — creates an authenticated server-side Supabase client using cookies
-- Used in all API route handlers and server components
+### RLS
+- All tables have RLS enabled
+- Current policies allow any authenticated user to read/write all expenses (no `user_id` column yet)
+- Categories and payment methods are read-only for authenticated users
 
 ---
 
-## Supabase Setup Summary
+## Current Supabase Setup
 
-- Project hosted on Supabase cloud
-- Tables: `expenses`, `categories`, `payment_methods`
-- `expenses.expense_type` distinguishes `'expense'` vs `'salary'`
-- `expenses.receipt_file_path` stores the private Storage path
-- `expenses.raw_ai_json` stores compact AI extraction output (JSONB)
-- `expenses.ai_confidence` is `numeric(4,3)`, range 0–1
-- Row Level Security (RLS) enabled; policies scope reads/writes to the authenticated user
-- Private storage bucket named `receipts` — never set to public
+- Project hosted on Supabase cloud (free tier)
+- Auth: email/password provider enabled
+- Storage: private bucket named `receipts`
+- Storage policies: authenticated users can read/write files scoped to their user ID folder
+- Signed URLs used for all file access (never public URLs)
 
 ---
 
-## OpenAI Extraction Summary
+## Current OpenAI/AI Extraction Setup
 
-- Model: GPT-4o via chat completions (`/v1/chat/completions`)
+- Model: GPT-4o via chat completions endpoint
 - Images are base64-encoded and sent as vision input
-- PDFs are rendered to an image before extraction (if supported by the upload flow)
-- Extracted fields: merchant name, total amount, currency, date, category suggestion, payment method suggestion, description
+- Extraction prompt defined in `src/lib/openai/extract.ts`
+- Extracted fields: vendor, amount, currency, expense_date, due_date, payment_method_guess, category_guess, description, invoice_number, confidence, fields_needing_review
 - Response is parsed and stored compactly as `raw_ai_json`
-- `ai_confidence` reflects the model's self-reported confidence (0–1)
-- The user must review all extracted fields before saving
+- `ai_confidence` reflects model's self-reported confidence (0-1)
+- User must review all extracted fields before saving
 - Auto-save without review is explicitly not implemented
 
 ---
 
-## Storage / Receipt Workflow Summary
+## Current Upload/Storage Workflow
 
-1. User selects a receipt file (image or PDF) in the upload UI
+1. User selects a receipt/invoice file (image or PDF) in the upload UI
 2. File is previewed client-side before upload
-3. On confirm, file is POSTed to `/api/receipts/upload`
-4. Server uploads to the private `receipts` bucket using the authenticated user's ID
-5. File path: `{userId}/{yyyy-mm}/{timestamp}-{safe-filename}`
-6. Path is stored in `expenses.receipt_file_path` (not a public URL)
-7. On preview, `/api/receipts/signed-url` generates a short-lived signed URL
-8. `ReceiptPreviewModal` renders the signed URL inline
+3. File is uploaded to the private `receipts` bucket via server action
+4. After upload, user selects document type: Invoice/Bill or Receipt/Payment Proof
+5. Form fields adapt based on document type selection
+6. User can optionally run AI extraction to prefill form fields
+7. User reviews and saves the expense
+8. File path stored in `expenses.receipt_file_path`
+9. On preview from Expenses table, a signed URL is generated server-side
+10. `ReceiptPreviewModal` renders the signed URL inline (image or PDF iframe)
 
 ---
 
-## Auth Summary
+## Current Route List
 
-- Supabase email/password authentication
-- Sign-in page: `src/app/sign-in/page.tsx` (client component, `fetch`-based)
-- Sign-in API: `src/app/api/auth/sign-in/route.ts`
-- Session managed via Supabase SSR cookies
-- `proxy.ts` calls `supabase.auth.getUser()` on every request to validate the session
-- On cold start or network error, `getUser()` failure is caught and treated as unauthenticated (safe fallback)
+### Pages
+| Route | File | Description |
+|---|---|---|
+| `/` | `src/app/page.tsx` | Dashboard (server component) |
+| `/expenses` | `src/app/expenses/page.tsx` | Expenses list (client-fetching shell) |
+| `/upload` | `src/app/upload/page.tsx` | Receipt/invoice upload |
+| `/salary` | `src/app/salary/page.tsx` | Salary expenses |
+| `/reports` | `src/app/reports/page.tsx` | Reports (placeholder) |
+| `/settings` | `src/app/settings/page.tsx` | Settings (placeholder) |
+| `/sign-in` | `src/app/sign-in/page.tsx` | Sign-in page |
+
+### API Routes
+| Route | Methods | Description |
+|---|---|---|
+| `/api/auth/sign-in` | POST | Supabase email/password sign-in |
+| `/api/expenses` | GET, POST | List and create expenses |
+| `/api/expenses/[id]` | PATCH, DELETE | Update and delete an expense |
+| `/api/expenses/[id]/mark-paid` | PATCH | Mark an invoice as paid |
+| `/api/categories` | GET | List categories |
+| `/api/payment-methods` | GET | List payment methods |
+
+### Server Actions
+| File | Used by |
+|---|---|
+| `src/app/upload/actions.ts` | Upload page (file upload, expense save) |
+| `src/app/salary/actions.ts` | Salary page |
+| `src/app/expenses/actions.ts` | Expenses page |
+| `src/app/auth/actions.ts` | Auth flows |
+
+### Proxy (Middleware)
+- `src/proxy.ts` — validates Supabase session, redirects unauthenticated users to `/sign-in`
 
 ---
 
-## Intentionally Out of Scope
+## What Is Out of Scope
 
 - Multi-tenant / multi-user organisation support
 - Payroll processing or salary slip generation
@@ -182,16 +230,5 @@ It is **not** a full accounting platform, payroll system, or GST/tax tool.
 - Recurring expense automation
 - Email receipt parsing
 - Mobile app
-
----
-
-## Recommended Next Phase
-
-**Phase 3B — AI Review Quality and Duplicate Detection**
-
-- Possible duplicate receipt detection (same amount + date + merchant)
-- Suspicious amount or date warnings
-- Better category and payment method matching from AI suggestions
-- Comparison between AI-extracted values and user-edited values
-- Field-level confidence display in the review form
-- Review queue improvements for bulk receipt processing
+- Accounts payable/receivable tracking beyond simple payment status
+- Auto-save of AI extraction output without user review

@@ -2,20 +2,40 @@
 
 ## How to Run Locally
 
+### Production Mode (Recommended)
+
+Production mode bypasses Turbopack entirely and uses a pre-built webpack bundle. This is currently the most reliable way to test product behavior.
+
+```bash
+npm install
+npm run build    # uses webpack via --webpack flag
+npm run start -- -p 3001
+```
+
+The app will be available at **http://localhost:3001**.
+
+### Dev Mode
+
+Dev mode uses Turbopack for fast hot-reload. It has been unstable on this project/machine (see warning below).
+
 ```bash
 npm install
 npm run dev
 ```
 
-The `predev` script automatically wipes `.next` before each start to prevent Turbopack cache corruption.
+Dev server runs on **http://localhost:3000** by default (or 3001 if configured via `.claude/launch.json`).
 
-The dev server runs on **http://localhost:3001** (configured in `.claude/launch.json`).
+### Warning: Dev Mode Instability
+
+Next.js 16 / Turbopack dev mode has repeatedly crashed during development of this project. Crashes include SST cache corruption, missing manifest files, and InvariantErrors. These crashes affect route rendering but are not caused by application code.
+
+**Recommendation:** Test product behavior using production mode (`npm run build && npm run start`) until dev mode instability is resolved. See `KNOWN_ISSUES.md` for details.
 
 ---
 
 ## Required Environment Variables
 
-Create a `.env.local` file in the project root with the following:
+Create a `.env.local` file in the project root:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co
@@ -26,148 +46,146 @@ OPENAI_API_KEY=sk-...
 | Variable | Used by | Notes |
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Client + Server | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Client + Server | Supabase anon/publishable key — safe to expose in browser |
-| `OPENAI_API_KEY` | Server only (API routes) | Never use `NEXT_PUBLIC_` prefix for this key |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Client + Server | Supabase anon/publishable key (safe to expose in browser) |
+| `OPENAI_API_KEY` | Server only | Never use `NEXT_PUBLIC_` prefix for this key |
 
 **Never put `OPENAI_API_KEY` in a `NEXT_PUBLIC_` variable.** It would be exposed to the browser.
 
 ---
 
-## Supabase Setup Steps
+## Supabase Migration Files
 
-1. Create a new Supabase project
-2. Run the schema migrations to create tables:
-   - `expenses` — main expense records
-   - `categories` — lookup table for expense categories
-   - `payment_methods` — lookup table for payment methods
-3. Seed `categories` and `payment_methods` with initial values
-4. Enable Row Level Security (RLS) on all tables
-5. Add RLS policies so users can only read/write their own rows (filter by `auth.uid()`)
-6. Enable Supabase Auth with email/password provider
-7. Copy the project URL and anon key into `.env.local`
+The following SQL files must be run in the Supabase SQL editor, in order:
 
-### Key Schema Notes
+| File | Purpose | Status |
+|---|---|---|
+| `supabase/schema.sql` | Base schema: tables, enums, RLS, seed data. Includes Phase 3C columns in the CREATE TABLE. | Run this for new projects |
+| `supabase/phase-1b-rls.sql` | RLS policy adjustments | Already applied |
+| `supabase/fix-rls-anon.sql` | RLS fix for anonymous access | Already applied |
+| `supabase/phase-3a-ai-confidence.sql` | Adds `ai_confidence` and `raw_ai_json` columns | Already applied |
+| `supabase/phase-3c-invoice-payment.sql` | Adds Phase 3C columns to existing databases (ALTER TABLE) | **NOT YET APPLIED** |
 
-- `expenses.expense_type` — `'expense'` or `'salary'`
-- `expenses.receipt_file_path` — private Storage path, not a public URL
-- `expenses.raw_ai_json` — JSONB, stores compact AI extraction output
-- `expenses.ai_confidence` — `numeric(4,3)`, value between 0 and 1
-- `expenses.amount` — use a numeric type with sufficient precision; avoid `smallint` (will truncate decimal confidence values)
+### Phase 3C Migration Note
+
+`supabase/phase-3c-invoice-payment.sql` must be run on the existing Supabase database before Phase 3C features (invoice workflow, payment status, mark paid) will work. The `ALTER TYPE ... ADD VALUE` line must be run separately from the rest due to PostgreSQL transaction limitations.
+
+For a **new project**, `supabase/schema.sql` already includes all Phase 3C columns in the CREATE TABLE statement — no need to run the Phase 3C migration separately.
 
 ---
 
-## Storage Bucket Setup
+## Supabase Storage Bucket
 
-1. In the Supabase dashboard, go to **Storage**
-2. Create a new bucket named **`receipts`**
-3. Set the bucket to **private** (do not make it public)
-4. Add a Storage policy that allows authenticated users to read/write only their own files:
-   - Upload policy: `(storage.foldername(name))[1] = auth.uid()::text`
-   - Download policy: same check
-5. File path convention used by the app:
-   ```
-   {userId}/{yyyy-mm}/{timestamp}-{safe-filename}
-   ```
-   Example: `abc123/2025-04/1712345678000-coffee-receipt.jpg`
+| Setting | Value |
+|---|---|
+| Bucket name | `receipts` |
+| Visibility | **Private** (never set to public) |
+| Access | Signed URLs generated server-side |
+| File path convention | `{userId}/{yyyy-mm}/{timestamp}-{safe-filename}` |
 
-Signed URLs (short-lived) are generated server-side for preview. Receipt paths are never exposed as public URLs.
+### Storage Policies
+
+Authenticated users can read/write files scoped to their own user ID folder:
+- Upload policy: `(storage.foldername(name))[1] = auth.uid()::text`
+- Download policy: same check
 
 ---
 
-## RLS Notes
+## RLS / Storage Policy Notes
 
 - All tables have RLS enabled
-- Policies use `auth.uid()` to scope reads and writes to the currently authenticated user
-- The Supabase server client (`src/lib/supabase/server.ts`) reads the session from cookies — it correctly inherits the user's identity for RLS enforcement
+- Current expense policies allow any authenticated user to read/write all expenses (no `user_id` column scoping yet — tighten in a future phase)
+- Categories and payment methods are read-only for authenticated users
+- The Supabase server client (`src/lib/supabase/server.ts`) reads the session from cookies and inherits the user's identity for RLS
 - Do not use the Supabase service role key in API routes or client code — it bypasses RLS entirely
 
 ---
 
-## OpenAI Setup
-
-1. Create an OpenAI API key at https://platform.openai.com/api-keys
-2. Add it to `.env.local` as `OPENAI_API_KEY`
-3. The app uses **GPT-4o** via the chat completions endpoint with vision input
-4. Receipt images are base64-encoded before being sent to the API
-5. The extraction prompt is defined in the `/api/receipts/extract` route handler
-
----
-
-## Common Useful Commands
+## How to Test in Production Mode
 
 ```bash
-# Start dev server (wipes .next first via predev)
-npm run dev
+# 1. Build the app (uses webpack)
+npm run build
 
-# Manually wipe the Next.js cache
-rm -rf .next
+# 2. Start the production server
+npm run start -- -p 3001
 
-# Kill any process on port 3001 (if dev server is stuck)
-lsof -ti :3001 | xargs kill -9
-
-# Kill all Next.js dev processes
-pkill -f "next dev"
-
-# Check TypeScript errors without running the server
-npx tsc --noEmit
-
-# Check what's using disk space in the project
-du -sh .next node_modules
+# 3. Open http://localhost:3001 in your browser
 ```
+
+Production mode uses `next start`, which serves the pre-built output without Turbopack. The server is stable and does not suffer from the SST cache corruption issues seen in dev mode.
 
 ---
 
-## How to Reset the Local Next.js Cache
+## How to Reset Dev Cache
 
-Turbopack maintains a persistent RocksDB/LevelDB cache inside `.next/dev/cache/turbopack/`. If this cache becomes corrupted (typically due to very low disk space or an abrupt process kill), routes start returning 500 errors with manifest-related messages.
-
-**Safe reset procedure:**
+If the dev server starts returning 500 errors or manifest-related errors:
 
 ```bash
 # 1. Stop the dev server
-# 2. Kill any lingering processes
 pkill -f "next dev"
 lsof -ti :3001 | xargs kill -9
 
-# 3. Wipe the cache
+# 2. Wipe the cache
 rm -rf .next
 
-# 4. Restart
-npm run dev
+# 3. Restart (dev mode or rebuild for production)
+npm run dev          # dev mode
+# or
+npm run build        # production mode
+npm run start -- -p 3001
 ```
 
-The `predev` script in `package.json` does `rm -rf .next` automatically before each `npm run dev`, so a normal restart is usually sufficient.
+---
+
+## Build Configuration
+
+The `build` script in `package.json` uses `next build --webpack` because the Turbopack builder has a bug in Next.js 16.2.6 that skips generating `client-reference-manifest` files for page routes. This causes `InvariantError` crashes at runtime in production mode. The webpack builder generates all manifests correctly.
+
+Do not remove the `--webpack` flag from the build script without verifying that Turbopack generates client reference manifests for all page routes.
 
 ---
 
-## Development Workflow Recommendations
+## Key Architecture Notes
 
-- **Keep at least 25–30 GB of free disk space.** Turbopack's SST cache writes fail silently when disk is near full, causing cascading 500 errors on all routes.
-- **Do not run two dev servers for the same project simultaneously.** They will contend over the same RocksDB files and deadlock.
-- **Restart cleanly after editing middleware.** Turbopack hot-reload of `src/proxy.ts` or `src/middleware.ts` can trigger SST write failures. Stop the server, wipe `.next`, and restart.
-- **Do not use `--no-turbopack` in this version.** The `--turbopack` flag was removed in Next.js 16; `--no-turbopack` causes a startup error.
-- **Avoid editing files during heavy compilations.** Save edits before navigating to a new route for the first time — this avoids triggering concurrent SST write operations.
-- **If `POST` to an API route returns 500 immediately after adding a new route file**, it usually means the build manifest hasn't been flushed yet. Wait for the compile to finish or do a clean restart.
+### Proxy (Middleware)
+- Next.js 16 renamed `middleware.ts` to `proxy.ts` — the file is `src/proxy.ts`
+- Exports a named `proxy` function (not `middleware`)
+- Auth routes (`/sign-in`, `/api/auth/*`) skip `getUser()` entirely to avoid Supabase cold-start ETIMEDOUT
+- The `x-user-authenticated` header is set by the proxy and read by the layout to show/hide the sidebar
+
+### Supabase Type Workaround
+- Several API routes use `(supabase as any).from("expenses")` to work around TypeScript type inference issues
+- The Supabase client's `.from().insert/update` returns `never` type in some cases
+- This is a known limitation of the hand-maintained type definitions in `src/lib/supabase/types.ts`
+
+### Dynamic Imports
+- `ExpenseFormModal`, `ReceiptPreviewModal`, and `MarkPaidModal` are dynamically imported with `ssr: false`
+- This avoids including heavy modal code in the initial page bundle
+
+### Instrumentation
+- `src/instrumentation.ts` absorbs transient ETIMEDOUT/ECONNRESET socket errors from the Supabase client
+- These errors are Supabase free-tier cold-start artifacts, not application bugs
 
 ---
 
-## Testing Checklist Before Moving to Next Phase
+## Testing Checklist
 
-Before starting a new phase, verify the following manually:
-
-- [ ] Sign in with valid credentials → redirected to dashboard
-- [ ] Sign in with invalid credentials → error message shown, no redirect
-- [ ] Unauthenticated visit to `/expenses` → redirected to `/sign-in`
+- [ ] Sign in with valid credentials -> redirected to dashboard
+- [ ] Sign in with invalid credentials -> error message shown
+- [ ] Unauthenticated visit to `/expenses` -> redirected to `/sign-in`
 - [ ] Dashboard loads with live chart data
-- [ ] Expenses page loads with live expense rows
-- [ ] Add expense → appears in list
-- [ ] Edit expense → changes reflected in list
-- [ ] Delete expense → removed from list
-- [ ] Upload a receipt image → previewed, saved, visible in Expenses row
-- [ ] Upload a receipt PDF → previewed, saved, visible in Expenses row
-- [ ] Click receipt icon in Expenses list → preview modal opens with correct file
-- [ ] Extract receipt with AI → form prefilled with extracted values
-- [ ] Edit AI-extracted values → saved correctly with `raw_ai_json` and `ai_confidence`
+- [ ] Expenses page loads with expense rows
+- [ ] Add expense -> appears in list
+- [ ] Edit expense -> changes reflected
+- [ ] Delete expense -> removed from list
+- [ ] Upload a receipt image -> preview, save, visible in Expenses
+- [ ] Upload a receipt PDF -> preview, save, visible in Expenses
+- [ ] Click receipt icon in Expenses -> preview modal opens
+- [ ] Extract receipt with AI -> form prefilled
+- [ ] Upload as invoice -> saved as unpaid
+- [ ] Upload as receipt/payment proof -> saved as paid
+- [ ] Mark unpaid invoice as paid -> payment status updated
+- [ ] Payment status badges show in Expenses table
 - [ ] Salary page loads with salary-type expenses
-- [ ] No console errors in browser on any of the above
-- [ ] `npx tsc --noEmit` passes with no errors
+- [ ] `npx tsc --noEmit` passes
+- [ ] `npm run build` passes

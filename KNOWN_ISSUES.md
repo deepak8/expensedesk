@@ -1,78 +1,99 @@
 # ExpenseDesk — Known Issues
 
-## Development Environment
+## Critical: Next.js Dev Server / Turbopack Instability
 
-### Turbopack Dev Cache Corruption
-**Symptom:** Dev server starts returning 500 errors with messages like:
+### Summary
+
+The Next.js 16.2.6 Turbopack dev server has repeatedly crashed during development. These crashes are **not caused by application code** — they are Turbopack bundler/cache bugs. The production build (webpack) and production server (`next start`) have been stable.
+
+### Symptoms
+
+The dev server crashes with errors including:
 - `ENOENT: no such file or directory, open '...routes-manifest.json'`
+- `ENOENT: no such file or directory, open '...prerender-manifest.json'`
 - `Cannot find module '../../chunks/ssr/[turbopack]_runtime.js'`
 - `Persisting failed: Unable to commit operations`
 - `Compaction failed: Another write batch or compaction is already active`
+- `Invariant: The client reference manifest for route "/upload" does not exist`
 
-**Root cause:** Turbopack maintains a persistent RocksDB/LevelDB SST cache in `.next/dev/cache/turbopack/`. When SST file writes fail (typically due to low disk space or a killed process mid-write), the compaction pipeline deadlocks and build manifests are never flushed to disk.
+Crashes happened during navigation to multiple routes, including `/expenses`, `/upload`, and `/`.
 
-**Fix:** Stop all dev servers, wipe `.next`, and restart:
-```bash
-pkill -f "next dev"
-lsof -ti :3001 | xargs kill -9
-rm -rf .next
-npm run dev
-```
+### Turbopack Build Bug
 
-### Disk Space Requirement
-Keep at least **25–30 GB of free disk space** during development. Turbopack's SST write failures are silent — they don't crash the server immediately, but they corrupt the cache incrementally until all routes fail. At 95%+ disk usage, this happens within minutes of starting the server.
+Turbopack (used by `next build` by default in Next.js 16.2.6) has a bug where it **does not generate `client-reference-manifest` files for page routes**. It only generates them for API routes. This causes `InvariantError` at runtime when `next start` tries to render any page.
 
-### Hot-Reload of Middleware Can Trigger Cache Corruption
-Editing `src/proxy.ts` or `src/middleware.ts` while the server is running triggers a Turbopack hot-reload that frequently causes an SST write failure. **Do a clean restart** (stop server → `rm -rf .next` → `npm run dev`) after editing middleware files.
+The build script has been changed to `next build --webpack` to work around this. Do not remove the `--webpack` flag without verifying the fix.
 
-### Do Not Run Multiple Dev Servers for the Same Project
-Two Next.js dev processes pointing at the same `.next` directory will contend over the same RocksDB lock files, causing a deadlock. Kill all instances before starting a new one.
+### Contributing Factors
+
+- **Low disk space** was one contributing factor earlier — Turbopack's SST cache writes fail silently when disk is near full. However, crashes continued even after freeing disk space (31 GB+ available).
+- **Supabase cold-start ETIMEDOUT** — the Supabase free-tier project spins down after inactivity. The first `getUser()` call times out at the socket level, which can disrupt Turbopack's compilation pipeline. This was mitigated by skipping auth calls for auth routes in `proxy.ts`.
+- **SST cache corruption** — Turbopack uses a persistent RocksDB/LevelDB cache in `.next/dev/cache/turbopack/`. Once corrupted, all routes return 500 until the cache is wiped.
+
+### Attempted Fixes (Partial List)
+
+| Fix | Result |
+|---|---|
+| Clearing `.next` directory | Temporarily resolved, but crashes recurred |
+| Switching to webpack for production build | **Fixed production mode** |
+| Dynamic importing modals (`ssr: false`) | Reduced bundle size, but did not prevent crashes |
+| Moving Expenses data behind API routes (removing server actions) | Reduced server-reference-manifest dependency, but did not prevent crashes |
+| Skipping auth calls for `/sign-in` and `/api/auth/*` routes | Eliminated one ETIMEDOUT trigger, but did not prevent all crashes |
+| Adding `predev` script to wipe `.next` before dev start | Ensured clean start, but was destructive (deleted production builds) — removed |
+| Using production server (`next start`) | **Stable when built with webpack** |
+| Instrumenting uncaught exception handler for ETIMEDOUT | Prevents process crash from socket errors, but does not fix Turbopack |
+
+### Current Status
+
+- **Production build passes** (`npm run build` with `--webpack` flag)
+- **Production server is stable** (`next start`)
+- **Dev server remains unreliable** — may crash during navigation or compilation
+- **Product logic has not been verified end-to-end** due to dev instability. A clean verification pass is needed.
+
+### Recommendation
+
+Do not keep patching Turbopack/dev server behavior as product fixes. The next agent should:
+
+1. Verify app stability in production mode first
+2. Confirm all core flows work end-to-end
+3. Only then continue product work
+4. If dev mode crashes persist, document them separately from product bugs
 
 ---
 
-## Supabase
+## Supabase Cold Start
 
-### Cold Start Delays
-Supabase projects on the free tier spin down after inactivity. The first request after a cold start (including `supabase.auth.getUser()` in the proxy) may time out with `ETIMEDOUT`. The proxy catches this and treats it as unauthenticated (safe fallback). The `src/instrumentation.ts` handler absorbs the uncaught `ETIMEDOUT write` socket error that fires after promise settlement. This is expected behaviour on free-tier projects.
-
-### RLS Must Be Configured Correctly
-If expenses or receipts appear to be missing or inaccessible, check that RLS policies are in place and reference `auth.uid()`. A misconfigured policy silently returns empty rows rather than an error.
-
----
-
-## AI Extraction
-
-### Extraction May Be Imperfect
-GPT-4o receipt extraction is best-effort. Low-quality images, faded receipts, unusual formats, or non-English receipts may produce incorrect or missing fields. **User review before saving is mandatory and intentional.**
-
-### PDF Extraction Quality Varies
-PDF receipts are handled via vision input. Extraction accuracy depends on whether the PDF renders clearly. Scanned PDFs or image-only PDFs may produce lower-quality results than native digital receipts.
-
-### `raw_ai_json` Is Intentionally Compact
-The AI extraction response is trimmed before storage to avoid large form payloads and oversized JSONB values. Do not expect `raw_ai_json` to contain the full OpenAI API response — it stores only the extracted fields and metadata.
-
-### `ai_confidence` Range
-`ai_confidence` is stored as `numeric(4,3)` — values must be between 0 and 1 (e.g. `0.9`, not `90`). Passing a value outside this range will cause a Supabase insert error. The API route clamps or validates this before insert.
+- Supabase free-tier projects spin down after inactivity
+- First request after cold start may time out with ETIMEDOUT
+- `proxy.ts` catches this and treats the user as unauthenticated (redirects to sign-in)
+- `src/instrumentation.ts` absorbs the uncaught socket error that fires after promise settlement
+- This is expected behavior on free-tier projects, not an application bug
 
 ---
 
-## Product Scope Limitations
+## Phase 3C Migration Not Yet Applied
 
-### Not Yet Multi-Tenant
-All expenses are scoped to the authenticated user via RLS. There is no concept of organisations, teams, or shared expense views. Do not attempt to add multi-user features without explicit planning.
+The `supabase/phase-3c-invoice-payment.sql` migration file has been written but **has not been run on the Supabase database**. Until this migration is applied:
 
-### Not a Full Accounting Platform
-ExpenseDesk intentionally does not handle:
-- Payroll or salary slip generation
-- GST, VAT, or tax calculations
-- Double-entry bookkeeping or ledgers
-- Bank feed or statement import
-- Recurring expenses
+- Phase 3C features (invoice workflow, payment status, mark paid) will not work against the database
+- The new columns (`document_type`, `payment_status`, `due_date`, `payment_date`, `paid_amount`, `payment_reference`, `payment_proof_file_path`) do not exist in the database yet
+- `SELECT *` queries will still work (missing columns return as undefined), but INSERT/UPDATE with the new fields will fail
 
-Adding these without careful planning will create scope and data model conflicts.
+---
 
-### Receipt Replacement and Deletion Cleanup
-If an expense's receipt is replaced or the expense is deleted, the old file in Supabase Storage is not automatically cleaned up. Storage objects may accumulate over time. This should be addressed in a future phase if storage costs become a concern.
+## AI Extraction Limitations
+
+- GPT-4o extraction is best-effort — low-quality images, faded receipts, unusual formats, or non-English receipts may produce incorrect or missing fields
+- PDF extraction quality varies depending on whether the PDF renders clearly
+- User review before saving is mandatory and intentional
+- `raw_ai_json` is intentionally compact — does not contain the full OpenAI API response
+- `ai_confidence` must be between 0 and 1 (`numeric(4,3)`)
+
+---
+
+## Receipt File Cleanup
+
+If an expense is deleted or its receipt is replaced, the old file in Supabase Storage is not automatically cleaned up. Storage objects may accumulate over time.
 
 ---
 
@@ -80,9 +101,9 @@ If an expense's receipt is replaced or the expense is deleted, the old file in S
 
 | Action | Why |
 |---|---|
-| Make the `receipts` storage bucket public | Receipts contain sensitive financial and personal data. Signed URLs must be used for all access. |
-| Put `OPENAI_API_KEY` in a `NEXT_PUBLIC_` variable | This exposes the key in the browser bundle and to all users of the app. |
-| Use the Supabase service role key in client code or API routes | The service role key bypasses RLS entirely. If leaked, it grants full database access. |
-| Auto-save AI extraction without user review | AI extraction is imperfect. Silent auto-save would result in incorrect expense records without any user awareness. |
-| Expand into payroll, GST, or accounting workflows without explicit planning | These require significant data model and business logic changes that would conflict with the current schema. |
-| Reintroduce heavy server actions into the Expenses route | The Expenses route was deliberately refactored to a lightweight client-fetching architecture to resolve persistent Turbopack compilation crashes. Server actions in this route re-introduce the `server-reference-manifest.json` dependency, which is a known failure point in this Next.js version. |
+| Make the `receipts` storage bucket public | Receipts contain sensitive financial data. Signed URLs must be used. |
+| Put `OPENAI_API_KEY` in a `NEXT_PUBLIC_` variable | Exposes the key in the browser bundle. |
+| Use the Supabase service role key in client code or API routes | Bypasses RLS entirely. |
+| Auto-save AI extraction without user review | AI extraction is imperfect. Silent auto-save would create incorrect records. |
+| Remove `--webpack` from the build script | Turbopack build skips client-reference-manifest files, causing runtime InvariantErrors. |
+| Expand into payroll, GST, or accounting workflows without planning | These require significant data model changes that would conflict with the current schema. |

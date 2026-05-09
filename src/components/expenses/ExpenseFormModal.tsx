@@ -24,6 +24,7 @@ interface Props {
 const EXPENSE_TYPES = [
   { value: "manual", label: "Manual" },
   { value: "receipt", label: "Receipt" },
+  { value: "invoice", label: "Invoice" },
   { value: "salary", label: "Salary" },
   { value: "reimbursement", label: "Reimbursement" },
 ];
@@ -33,6 +34,12 @@ const STATUSES = [
   { value: "needs_review", label: "Needs Review" },
   { value: "verified", label: "Verified" },
   { value: "missing_receipt", label: "Missing Receipt" },
+];
+
+const PAYMENT_STATUSES = [
+  { value: "paid", label: "Paid" },
+  { value: "unpaid", label: "Unpaid" },
+  { value: "partially_paid", label: "Partially Paid" },
 ];
 
 function FormField({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
@@ -65,13 +72,15 @@ export default function ExpenseFormModal({
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState(expense?.payment_status ?? "paid");
 
   useEffect(() => {
     if (!open) {
       setError(null);
+      setPaymentStatus(expense?.payment_status ?? "paid");
       formRef.current?.reset();
     }
-  }, [open]);
+  }, [open, expense?.payment_status]);
 
   const today = new Date().toISOString().split("T")[0];
 
@@ -81,17 +90,28 @@ export default function ExpenseFormModal({
     setIsPending(true);
 
     const fd = new FormData(e.currentTarget);
+    const expenseType = (fd.get("expense_type") as string) ?? "manual";
+
+    // Derive document_type from expense_type
+    let documentType = "manual";
+    if (expenseType === "invoice") documentType = "invoice";
+    else if (expenseType === "receipt") documentType = "receipt";
+    else if (expenseType === "salary") documentType = "salary";
+
     const body = {
       expense_date: (fd.get("expense_date") as string)?.trim(),
       vendor: (fd.get("vendor") as string)?.trim(),
       amount: fd.get("amount"),
-      category_id: fd.get("category_id"),
-      payment_method_id: fd.get("payment_method_id"),
-      expense_type: fd.get("expense_type"),
+      category_id: fd.get("category_id") || null,
+      payment_method_id: fd.get("payment_method_id") || null,
+      expense_type: expenseType,
       status: fd.get("status"),
       description: (fd.get("description") as string)?.trim() || null,
       invoice_number: (fd.get("invoice_number") as string)?.trim() || null,
       notes: (fd.get("notes") as string)?.trim() || null,
+      document_type: documentType,
+      payment_status: paymentStatus,
+      due_date: (fd.get("due_date") as string)?.trim() || null,
     };
 
     try {
@@ -113,6 +133,15 @@ export default function ExpenseFormModal({
       setError("Network error — please try again.");
     } finally {
       setIsPending(false);
+    }
+  }
+
+  function handleExpenseTypeChange(value: string) {
+    // Auto-suggest payment status based on type
+    if (value === "invoice" && paymentStatus === "paid") {
+      setPaymentStatus("unpaid");
+    } else if (value !== "invoice" && paymentStatus === "unpaid") {
+      setPaymentStatus("paid");
     }
   }
 
@@ -186,10 +215,9 @@ export default function ExpenseFormModal({
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <FormField label="Category" required>
+              <FormField label="Category">
                 <select
                   name="category_id"
-                  required
                   disabled={isPending}
                   defaultValue={expense?.category_id ?? ""}
                   className={selectCls}
@@ -200,10 +228,9 @@ export default function ExpenseFormModal({
                   ))}
                 </select>
               </FormField>
-              <FormField label="Payment Method" required>
+              <FormField label="Payment Method">
                 <select
                   name="payment_method_id"
-                  required
                   disabled={isPending}
                   defaultValue={expense?.payment_method_id ?? ""}
                   className={selectCls}
@@ -223,6 +250,7 @@ export default function ExpenseFormModal({
                   required
                   disabled={isPending}
                   defaultValue={expense?.expense_type ?? "manual"}
+                  onChange={(e) => handleExpenseTypeChange(e.target.value)}
                   className={selectCls}
                 >
                   {EXPENSE_TYPES.map((t) => (
@@ -242,6 +270,30 @@ export default function ExpenseFormModal({
                     <option key={s.value} value={s.value}>{s.label}</option>
                   ))}
                 </select>
+              </FormField>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="Payment Status">
+                <select
+                  value={paymentStatus}
+                  onChange={(e) => setPaymentStatus(e.target.value as "unpaid" | "partially_paid" | "paid")}
+                  disabled={isPending}
+                  className={selectCls}
+                >
+                  {PAYMENT_STATUSES.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField label="Due Date">
+                <input
+                  type="date"
+                  name="due_date"
+                  disabled={isPending}
+                  defaultValue={expense?.due_date ?? ""}
+                  className={inputCls}
+                />
               </FormField>
             </div>
 

@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import type { ExpenseStatus, Database } from "@/lib/supabase/types";
+import type { ExpenseStatus, ExpenseType, DocumentType, PaymentStatus, Database } from "@/lib/supabase/types";
 
 type ExpenseInsert = Database["public"]["Tables"]["expenses"]["Insert"];
 
@@ -13,6 +13,7 @@ const AI_JSON_SAFE_KEYS = [
   "amount",
   "currency",
   "expense_date",
+  "due_date",
   "payment_method_guess",
   "category_guess",
   "description",
@@ -98,6 +99,18 @@ export async function saveReceiptExpenseAction(
   const status = ((formData.get("status") as string | null)?.trim() || "needs_review") as ExpenseStatus;
   const currency               = (formData.get("currency")           as string | null)?.trim() || "INR";
 
+  // ── Phase 3C fields ────────────────────────────────────────────────────────
+  const document_type    = ((formData.get("document_type")     as string | null)?.trim() || "receipt") as DocumentType;
+  const payment_status   = ((formData.get("payment_status")    as string | null)?.trim() || "paid") as PaymentStatus;
+  const due_date         = (formData.get("due_date")            as string | null)?.trim() || null;
+  const payment_reference = (formData.get("payment_reference") as string | null)?.trim() || null;
+  const expense_type_raw = ((formData.get("expense_type")       as string | null)?.trim() || "receipt") as ExpenseType;
+
+  // For receipts / payment proofs: payment_date = expense_date, paid_amount = amount
+  // For invoices: both are null (unpaid)
+  const payment_date = document_type === "invoice" ? null : expense_date;
+  const paid_amount  = document_type === "invoice" ? null : amount;
+
   // ── AI fields (compact extraction JSON only — no OpenAI calls here) ────────
   const raw_ai_json   = parseAiJson(formData.get("raw_ai_json") as string | null);
   const ai_conf_raw   = (formData.get("ai_confidence") as string | null)?.trim();
@@ -114,13 +127,19 @@ export async function saveReceiptExpenseAction(
     currency,
     category_id:        category_id_raw       ? parseInt(category_id_raw, 10)       : null,
     payment_method_id:  payment_method_id_raw ? parseInt(payment_method_id_raw, 10) : null,
-    expense_type:       "receipt",
+    expense_type:       expense_type_raw,
     status,
     receipt_file_path,
     invoice_number,
     notes,
     raw_ai_json,
     ai_confidence: ai_confidence !== null && !isNaN(ai_confidence) ? ai_confidence : null,
+    document_type,
+    payment_status,
+    due_date,
+    payment_date,
+    paid_amount,
+    payment_reference,
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

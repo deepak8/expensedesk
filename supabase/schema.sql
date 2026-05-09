@@ -46,6 +46,14 @@ create table if not exists expenses (
   ai_confidence      numeric(4,3) check (ai_confidence is null or (ai_confidence >= 0 and ai_confidence <= 1)),
   raw_ai_json        jsonb,
   notes              text,
+  -- Phase 3C: Invoice / Payment Proof workflow
+  document_type      text not null default 'receipt',
+  payment_status     text not null default 'paid',
+  due_date           date,
+  payment_date       date,
+  paid_amount        numeric(12, 2),
+  payment_reference  text,
+  payment_proof_file_path text,
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now()
 );

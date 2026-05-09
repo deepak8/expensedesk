@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import type { ExpenseType, ExpenseStatus } from "@/lib/supabase/types";
+import type { ExpenseType, ExpenseStatus, DocumentType, PaymentStatus } from "@/lib/supabase/types";
 
 // ─── PATCH /api/expenses/[id] ─────────────────────────────────────────────────
 
@@ -26,9 +26,16 @@ export async function PATCH(
     invoice_number,
     notes,
     currency,
+    document_type,
+    payment_status,
+    due_date,
+    payment_date,
+    paid_amount,
+    payment_reference,
+    payment_proof_file_path,
   } = body;
 
-  if (!expense_date || !vendor || amount == null || !category_id || !payment_method_id) {
+  if (!expense_date || !vendor || amount == null) {
     return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
   }
 
@@ -41,14 +48,21 @@ export async function PATCH(
       expense_date,
       vendor,
       amount: Number(amount),
-      category_id: Number(category_id),
-      payment_method_id: Number(payment_method_id),
+      category_id: category_id ? Number(category_id) : null,
+      payment_method_id: payment_method_id ? Number(payment_method_id) : null,
       expense_type: expense_type as ExpenseType,
       status: status as ExpenseStatus,
       description: description ?? null,
       invoice_number: invoice_number ?? null,
       notes: notes ?? null,
       currency: currency ?? "INR",
+      document_type: (document_type ?? "manual") as DocumentType,
+      payment_status: (payment_status ?? "paid") as PaymentStatus,
+      due_date: due_date ?? null,
+      payment_date: payment_date ?? null,
+      paid_amount: paid_amount != null ? Number(paid_amount) : null,
+      payment_reference: payment_reference ?? null,
+      payment_proof_file_path: payment_proof_file_path ?? null,
     })
     .eq("id", id)
     .select()

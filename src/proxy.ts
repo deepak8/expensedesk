@@ -10,6 +10,16 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  const { pathname } = request.nextUrl;
+
+  // Allow auth routes WITHOUT calling getUser().
+  // This avoids the Supabase cold-start ETIMEDOUT that crashes Turbopack.
+  // The sign-in page and auth API routes do not need session validation.
+  const isAuthRoute = pathname === "/sign-in" || pathname.startsWith("/api/auth/");
+  if (isAuthRoute) {
+    return NextResponse.next();
+  }
+
   // Build the initial response with a copy of the incoming request headers so
   // we can append x-user-authenticated for the layout to read.
   const requestHeaders = new Headers(request.headers);
@@ -52,18 +62,13 @@ export async function proxy(request: NextRequest) {
     console.error("[proxy] supabase.auth.getUser() failed — treating as unauthenticated:", err);
   }
 
-  const { pathname } = request.nextUrl;
-
-  // Allow the sign-in API route without auth (it IS the auth endpoint).
-  const isAuthRoute = pathname === "/sign-in" || pathname.startsWith("/api/auth/");
-
-  if (!user && !isAuthRoute) {
+  if (!user) {
     const url = request.nextUrl.clone();
     url.pathname = "/sign-in";
     return NextResponse.redirect(url);
   }
 
-  if (user && pathname === "/sign-in") {
+  if (pathname === "/sign-in") {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);

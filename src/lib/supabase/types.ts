@@ -1,8 +1,10 @@
-// Auto-maintained by hand for Phase 1A.
+// Auto-maintained by hand for Phase 1A+3C.
 // Replace with `supabase gen types typescript` output once CLI is configured.
 
-export type ExpenseType = "manual" | "receipt" | "salary" | "reimbursement";
+export type ExpenseType = "manual" | "receipt" | "salary" | "reimbursement" | "invoice";
 export type ExpenseStatus = "draft" | "needs_review" | "verified" | "missing_receipt";
+export type DocumentType = "invoice" | "receipt" | "payment_proof" | "manual" | "salary";
+export type PaymentStatus = "unpaid" | "partially_paid" | "paid";
 
 export interface Database {
   public: {
@@ -52,6 +54,13 @@ export interface Database {
           ai_confidence: number | null;
           raw_ai_json: Record<string, unknown> | null;
           notes: string | null;
+          document_type: DocumentType;
+          payment_status: PaymentStatus;
+          due_date: string | null;
+          payment_date: string | null;
+          paid_amount: number | null;
+          payment_reference: string | null;
+          payment_proof_file_path: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -71,6 +80,13 @@ export interface Database {
           ai_confidence?: number | null;
           raw_ai_json?: Record<string, unknown> | null;
           notes?: string | null;
+          document_type?: DocumentType;
+          payment_status?: PaymentStatus;
+          due_date?: string | null;
+          payment_date?: string | null;
+          paid_amount?: number | null;
+          payment_reference?: string | null;
+          payment_proof_file_path?: string | null;
         };
         Update: {
           id?: string;
@@ -88,6 +104,13 @@ export interface Database {
           ai_confidence?: number | null;
           raw_ai_json?: Record<string, unknown> | null;
           notes?: string | null;
+          document_type?: DocumentType;
+          payment_status?: PaymentStatus;
+          due_date?: string | null;
+          payment_date?: string | null;
+          paid_amount?: number | null;
+          payment_reference?: string | null;
+          payment_proof_file_path?: string | null;
         };
       };
     };

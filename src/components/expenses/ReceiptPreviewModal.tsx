@@ -19,6 +19,8 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   receiptPath: string;
   vendor: string;
+  /** Label shown in the dialog title, e.g. "Receipt", "Invoice", "Payment Proof". */
+  label?: string;
 }
 
 function isPdfPath(path: string) {
@@ -36,6 +38,7 @@ export default function ReceiptPreviewModal({
   onOpenChange,
   receiptPath,
   vendor,
+  label = "Receipt",
 }: Props) {
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -82,7 +85,7 @@ export default function ReceiptPreviewModal({
       >
         <DialogHeader>
           <DialogTitle className="truncate pr-8">
-            Receipt — {vendor}
+            {label} — {vendor}
           </DialogTitle>
           <DialogCloseButton />
         </DialogHeader>

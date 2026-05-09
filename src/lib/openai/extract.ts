@@ -11,6 +11,7 @@ export interface ExtractionResult {
   amount: number | null;
   currency: string | null;
   expense_date: string | null;
+  due_date: string | null;
   payment_method_guess: string | null;
   category_guess: string | null;
   description: string | null;
@@ -87,6 +88,7 @@ export async function extractReceiptData(
 - amount: number or null (grand total / amount paid — NOT tax/GST alone; prefer "Total", "Amount Paid", or "Grand Total")
 - currency: string or null (3-letter ISO code; use "INR" only if the receipt is clearly Indian or the amount format strongly implies rupees; otherwise use the detected currency or null)
 - expense_date: string or null (YYYY-MM-DD; use the transaction / invoice date)
+- due_date: string or null (YYYY-MM-DD; the payment due date if visible, common on invoices/bills; null if not an invoice or no due date shown)
 - payment_method_guess: string or null (match one of these exactly if possible: ${methodList})
 - category_guess: string or null (match one of these exactly if possible: ${categoryList})
 - description: string or null (one-line summary of what was purchased, e.g. "Office supplies from Staples")
@@ -162,6 +164,7 @@ function parseResponse(text: string): ExtractResult {
         typeof raw.amount === "number" && isFinite(raw.amount) ? raw.amount : null,
       currency: typeof raw.currency === "string" ? raw.currency : null,
       expense_date: typeof raw.expense_date === "string" ? raw.expense_date : null,
+      due_date: typeof raw.due_date === "string" ? raw.due_date : null,
       payment_method_guess:
         typeof raw.payment_method_guess === "string" ? raw.payment_method_guess : null,
       category_guess:

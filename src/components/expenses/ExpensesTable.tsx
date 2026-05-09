@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
-import { Plus, Filter, Receipt, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Plus, Filter, Receipt, Pencil, Trash2, Loader2, CheckCircle, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Header from "@/components/Header";
 import {
@@ -24,6 +24,10 @@ const ReceiptPreviewModal = dynamic(
   () => import("@/components/expenses/ReceiptPreviewModal"),
   { ssr: false }
 );
+const MarkPaidModal = dynamic(
+  () => import("@/components/expenses/MarkPaidModal"),
+  { ssr: false }
+);
 
 export interface DisplayExpense {
   id: string;
@@ -35,7 +39,11 @@ export interface DisplayExpense {
   amount: number;
   hasReceipt: boolean;
   receiptPath: string | null;
+  paymentProofPath: string | null;
   status: "Verified" | "Needs Review" | "Pending" | "Draft" | "Missing Receipt";
+  paymentStatus: "Paid" | "Unpaid" | "Partially Paid";
+  documentType: string;
+  dueDate: string | null;
 }
 
 const STATUS_STYLES: Record<DisplayExpense["status"], string> = {
@@ -53,6 +61,18 @@ const STATUS_MAP: Record<string, DisplayExpense["status"]> = {
   missing_receipt: "Missing Receipt",
 };
 
+const PAYMENT_STATUS_STYLES: Record<DisplayExpense["paymentStatus"], string> = {
+  Paid: "bg-green-50 text-green-700 border-green-200",
+  Unpaid: "bg-orange-50 text-orange-700 border-orange-200",
+  "Partially Paid": "bg-amber-50 text-amber-700 border-amber-200",
+};
+
+const PAYMENT_STATUS_MAP: Record<string, DisplayExpense["paymentStatus"]> = {
+  paid: "Paid",
+  unpaid: "Unpaid",
+  partially_paid: "Partially Paid",
+};
+
 function toDisplay(row: ExpenseWithRefs): DisplayExpense {
   return {
     id: row.id,
@@ -64,7 +84,11 @@ function toDisplay(row: ExpenseWithRefs): DisplayExpense {
     amount: Number(row.amount),
     hasReceipt: !!row.receipt_file_path,
     receiptPath: row.receipt_file_path ?? null,
+    paymentProofPath: row.payment_proof_file_path ?? null,
     status: STATUS_MAP[row.status] ?? "Draft",
+    paymentStatus: PAYMENT_STATUS_MAP[row.payment_status] ?? "Paid",
+    documentType: row.document_type ?? "receipt",
+    dueDate: row.due_date ?? null,
   };
 }
 
@@ -102,6 +126,7 @@ export default function ExpensesTable() {
   const [category, setCategory] = useState("All Categories");
   const [method, setMethod] = useState("All Methods");
   const [status, setStatus] = useState("All Statuses");
+  const [paymentFilter, setPaymentFilter] = useState("All Payments");
 
   // ─── Modal state ─────────────────────────────────────────────────────────────
   const [formOpen, setFormOpen] = useState(false);
@@ -109,7 +134,12 @@ export default function ExpensesTable() {
   const [deleteTarget, setDeleteTarget] = useState<DisplayExpense | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [previewReceipt, setPreviewReceipt] = useState<{ path: string; vendor: string } | null>(null);
+  const [previewReceipt, setPreviewReceipt] = useState<{
+    path: string;
+    vendor: string;
+    label?: string;
+  } | null>(null);
+  const [markPaidTarget, setMarkPaidTarget] = useState<DisplayExpense | null>(null);
 
   // ─── Load all data ───────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -155,18 +185,24 @@ export default function ExpensesTable() {
   const categoryOptions = ["All Categories", ...categories];
   const methodOptions = ["All Methods", ...paymentMethods];
   const statusOptions = ["All Statuses", "Verified", "Needs Review", "Pending", "Draft", "Missing Receipt"];
+  const paymentOptions = ["All Payments", "Paid", "Unpaid", "Partially Paid"];
 
   const filtered = useMemo(() => {
     return expenses.filter((e) => {
       if (category !== "All Categories" && e.category !== category) return false;
       if (method !== "All Methods" && e.paymentMethod !== method) return false;
       if (status !== "All Statuses" && e.status !== status) return false;
+      if (paymentFilter !== "All Payments" && e.paymentStatus !== paymentFilter) return false;
       return true;
     });
-  }, [expenses, category, method, status]);
+  }, [expenses, category, method, status, paymentFilter]);
 
   const total = filtered.reduce((s, e) => s + e.amount, 0);
-  const hasFilters = category !== "All Categories" || method !== "All Methods" || status !== "All Statuses";
+  const hasFilters =
+    category !== "All Categories" ||
+    method !== "All Methods" ||
+    status !== "All Statuses" ||
+    paymentFilter !== "All Payments";
 
   // ─── Actions ─────────────────────────────────────────────────────────────────
   function openCreate() {
@@ -201,6 +237,19 @@ export default function ExpensesTable() {
     } finally {
       setIsDeleting(false);
     }
+  }
+
+  function clearFilters() {
+    setCategory("All Categories");
+    setMethod("All Methods");
+    setStatus("All Statuses");
+    setPaymentFilter("All Payments");
+  }
+
+  /** Determine the label for the receipt/document preview modal */
+  function docLabel(e: DisplayExpense): string {
+    if (e.documentType === "invoice") return "Invoice";
+    return "Receipt";
   }
 
   // ─── Loading state ───────────────────────────────────────────────────────────
@@ -272,9 +321,10 @@ export default function ExpensesTable() {
           <FilterSelect options={categoryOptions} value={category} onChange={setCategory} />
           <FilterSelect options={methodOptions} value={method} onChange={setMethod} />
           <FilterSelect options={statusOptions} value={status} onChange={setStatus} />
+          <FilterSelect options={paymentOptions} value={paymentFilter} onChange={setPaymentFilter} />
           {hasFilters && (
             <button
-              onClick={() => { setCategory("All Categories"); setMethod("All Methods"); setStatus("All Statuses"); }}
+              onClick={clearFilters}
               className="text-xs text-primary hover:underline font-medium ml-1"
             >
               Clear filters
@@ -293,9 +343,10 @@ export default function ExpensesTable() {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Description</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Method</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">Amount</th>
-                <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground">Receipt</th>
+                <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground">Docs</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Status</th>
-                <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground w-16">Actions</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Payment</th>
+                <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground w-20">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -317,18 +368,46 @@ export default function ExpensesTable() {
                   <td className="px-4 py-3 text-xs font-semibold text-foreground text-right whitespace-nowrap">
                     ₹{e.amount.toLocaleString("en-IN")}
                   </td>
+                  {/* Docs column — receipt / invoice / payment proof icons */}
                   <td className="px-4 py-3 text-center">
-                    {e.receiptPath ? (
-                      <button
-                        onClick={() => setPreviewReceipt({ path: e.receiptPath!, vendor: e.vendor })}
-                        title="View receipt"
-                        className="w-6 h-6 rounded-md flex items-center justify-center mx-auto text-green-500 hover:bg-green-50 hover:text-green-600 transition-colors"
-                      >
-                        <Receipt className="w-3.5 h-3.5" />
-                      </button>
-                    ) : (
-                      <span className="text-muted-foreground/40 text-xs">—</span>
-                    )}
+                    <div className="flex items-center justify-center gap-1">
+                      {e.receiptPath ? (
+                        <button
+                          onClick={() =>
+                            setPreviewReceipt({
+                              path: e.receiptPath!,
+                              vendor: e.vendor,
+                              label: docLabel(e),
+                            })
+                          }
+                          title={`View ${docLabel(e).toLowerCase()}`}
+                          className="w-6 h-6 rounded-md flex items-center justify-center text-green-500 hover:bg-green-50 hover:text-green-600 transition-colors"
+                        >
+                          {e.documentType === "invoice" ? (
+                            <FileText className="w-3.5 h-3.5" />
+                          ) : (
+                            <Receipt className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      ) : (
+                        <span className="text-muted-foreground/40 text-xs">—</span>
+                      )}
+                      {e.paymentProofPath && (
+                        <button
+                          onClick={() =>
+                            setPreviewReceipt({
+                              path: e.paymentProofPath!,
+                              vendor: e.vendor,
+                              label: "Payment Proof",
+                            })
+                          }
+                          title="View payment proof"
+                          className="w-6 h-6 rounded-md flex items-center justify-center text-blue-500 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                        >
+                          <CheckCircle className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <span
@@ -340,8 +419,29 @@ export default function ExpensesTable() {
                       {e.status}
                     </span>
                   </td>
+                  {/* Payment status */}
+                  <td className="px-4 py-3">
+                    <span
+                      className={cn(
+                        "text-[11px] px-2 py-0.5 rounded-md border font-medium",
+                        PAYMENT_STATUS_STYLES[e.paymentStatus] ?? PAYMENT_STATUS_STYLES["Paid"]
+                      )}
+                    >
+                      {e.paymentStatus}
+                    </span>
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {/* Mark Paid button — only for unpaid/partially paid */}
+                      {(e.paymentStatus === "Unpaid" || e.paymentStatus === "Partially Paid") && (
+                        <button
+                          onClick={() => setMarkPaidTarget(e)}
+                          title="Mark as Paid"
+                          className="w-6 h-6 rounded-md flex items-center justify-center text-green-600 hover:bg-green-50 hover:text-green-700 transition-colors"
+                        >
+                          <CheckCircle className="w-3 h-3" />
+                        </button>
+                      )}
                       <button
                         onClick={() => openEdit(e.id)}
                         title="Edit"
@@ -362,7 +462,7 @@ export default function ExpensesTable() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                  <td colSpan={10} className="px-4 py-12 text-center text-sm text-muted-foreground">
                     No expenses match the selected filters.
                   </td>
                 </tr>
@@ -391,13 +491,25 @@ export default function ExpensesTable() {
         onSaved={loadData}
       />
 
-      {/* Receipt preview modal */}
+      {/* Receipt / Invoice / Payment proof preview modal */}
       {previewReceipt && (
         <ReceiptPreviewModal
           open={!!previewReceipt}
           onOpenChange={(open) => { if (!open) setPreviewReceipt(null); }}
           receiptPath={previewReceipt.path}
           vendor={previewReceipt.vendor}
+          label={previewReceipt.label}
+        />
+      )}
+
+      {/* Mark Paid modal */}
+      {markPaidTarget && (
+        <MarkPaidModal
+          open={!!markPaidTarget}
+          onOpenChange={(open) => { if (!open) setMarkPaidTarget(null); }}
+          expense={markPaidTarget}
+          paymentMethodRows={paymentMethodRows}
+          onSaved={loadData}
         />
       )}
 
