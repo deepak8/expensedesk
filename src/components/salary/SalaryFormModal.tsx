@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Dialog,
@@ -16,19 +16,25 @@ import {
   updateSalaryAction,
   type SalaryActionState,
 } from "@/app/salary/actions";
-import type { PaymentMethodRow, ExpenseWithRefs } from "@/lib/supabase/types";
+import type { PaymentMethodRow, ExpenseWithRefs, EmployeeRow } from "@/lib/supabase/types";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   expense?: ExpenseWithRefs;
   paymentMethodRows: PaymentMethodRow[];
+  employeeRows: EmployeeRow[];
 }
 
 const SALARY_STATUSES = [
   { value: "draft", label: "Draft" },
   { value: "verified", label: "Verified" },
   { value: "needs_review", label: "Needs Review" },
+];
+
+const PAYMENT_STATUSES = [
+  { value: "paid", label: "Paid" },
+  { value: "unpaid", label: "Unpaid" },
 ];
 
 /** "Salary for May 2026" → "2026-05" */
@@ -81,10 +87,15 @@ export default function SalaryFormModal({
   onOpenChange,
   expense,
   paymentMethodRows,
+  employeeRows,
 }: Props) {
   const router = useRouter();
   const isEdit = !!expense;
   const formRef = useRef<HTMLFormElement>(null);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(expense?.employee_id ?? "");
+  const [vendor, setVendor] = useState(expense?.vendor ?? "");
+  const [amount, setAmount] = useState(expense?.amount != null ? String(expense.amount) : "");
+  const [paymentMethodId, setPaymentMethodId] = useState(expense?.payment_method_id != null ? String(expense.payment_method_id) : "");
 
   const action = isEdit ? updateSalaryAction : createSalaryAction;
   const [state, formAction, isPending] = useActionState<SalaryActionState | null, FormData>(
@@ -103,12 +114,34 @@ export default function SalaryFormModal({
     if (!open) {
       formRef.current?.reset();
     }
+    if (open) {
+      setSelectedEmployeeId(expense?.employee_id ?? "");
+      setVendor(expense?.vendor ?? "");
+      setAmount(expense?.amount != null ? String(expense.amount) : "");
+      setPaymentMethodId(expense?.payment_method_id != null ? String(expense.payment_method_id) : "");
+    }
   }, [open]);
 
   const today = new Date().toISOString().split("T")[0];
   const defaultMonth = expense
     ? descriptionToMonth(expense.description)
     : currentMonth();
+  const activeEmployees = employeeRows.filter((employee) => employee.is_active || employee.id === expense?.employee_id);
+  const paymentMethodOptions = paymentMethodRows.filter(
+    (method) => method.is_active || method.id === expense?.payment_method_id
+  );
+
+  function handleEmployeeChange(employeeId: string) {
+    setSelectedEmployeeId(employeeId);
+    const employee = employeeRows.find((row) => row.id === employeeId);
+    if (!employee) return;
+
+    setVendor(employee.name);
+    if (employee.default_salary !== null) setAmount(String(employee.default_salary));
+    if (employee.default_payment_method_id !== null) {
+      setPaymentMethodId(String(employee.default_payment_method_id));
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -132,6 +165,24 @@ export default function SalaryFormModal({
               </div>
             )}
 
+            <FormField label="Employee / Contractor">
+              <select
+                name="employee_id"
+                disabled={isPending}
+                value={selectedEmployeeId}
+                onChange={(event) => handleEmployeeChange(event.target.value)}
+                className={selectCls}
+              >
+                <option value="">Manual entry / not in directory</option>
+                {activeEmployees.map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.name}
+                    {employee.role ? ` · ${employee.role}` : ""}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+
             {/* Row 1: Employee Name + Salary Month */}
             <div className="grid grid-cols-2 gap-3">
               <FormField label="Employee / Contractor Name" required>
@@ -140,7 +191,8 @@ export default function SalaryFormModal({
                   name="vendor"
                   required
                   disabled={isPending}
-                  defaultValue={expense?.vendor ?? ""}
+                  value={vendor}
+                  onChange={(event) => setVendor(event.target.value)}
                   placeholder="e.g. Rahul Sharma"
                   className={inputCls}
                 />
@@ -180,7 +232,8 @@ export default function SalaryFormModal({
                     min="0"
                     step="0.01"
                     disabled={isPending}
-                    defaultValue={expense?.amount ?? ""}
+                    value={amount}
+                    onChange={(event) => setAmount(event.target.value)}
                     placeholder="0.00"
                     className={inputCls + " pl-7"}
                   />
@@ -195,11 +248,12 @@ export default function SalaryFormModal({
                   name="payment_method_id"
                   required
                   disabled={isPending}
-                  defaultValue={expense?.payment_method_id ?? ""}
+                  value={paymentMethodId}
+                  onChange={(event) => setPaymentMethodId(event.target.value)}
                   className={selectCls}
                 >
                   <option value="">Select…</option>
-                  {paymentMethodRows.map((m) => (
+                  {paymentMethodOptions.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.name}
                     </option>
@@ -222,6 +276,22 @@ export default function SalaryFormModal({
                 </select>
               </FormField>
             </div>
+
+            <FormField label="Payment Status" required>
+              <select
+                name="payment_status"
+                required
+                disabled={isPending}
+                defaultValue={expense?.payment_status ?? "paid"}
+                className={selectCls}
+              >
+                {PAYMENT_STATUSES.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
+              </select>
+            </FormField>
 
             {/* Row 4: Notes */}
             <FormField label="Notes">

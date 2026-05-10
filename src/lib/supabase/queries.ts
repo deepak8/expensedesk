@@ -1,5 +1,11 @@
 import { createClient } from "./server";
-import type { CategoryRow, PaymentMethodRow, ExpenseWithRefs } from "./types";
+import type {
+  CategoryRow,
+  PaymentMethodRow,
+  BusinessSettingsRow,
+  EmployeeRow,
+  ExpenseWithRefs,
+} from "./types";
 
 // Returns true only when both env vars are present at runtime.
 export function isSupabaseConfigured(): boolean {
@@ -15,7 +21,7 @@ export async function getCategories(): Promise<CategoryRow[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("categories")
-    .select("id, name")
+    .select("id, name, is_active")
     .order("name");
 
   if (error) {
@@ -31,11 +37,46 @@ export async function getPaymentMethods(): Promise<PaymentMethodRow[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("payment_methods")
-    .select("id, name")
+    .select("id, name, is_active")
     .order("name");
 
   if (error) {
     console.error("[getPaymentMethods]", error.message);
+    return [];
+  }
+  return data ?? [];
+}
+
+// ─── Business Settings ───────────────────────────────────────────────────────
+
+export async function getBusinessSettings(): Promise<BusinessSettingsRow | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("business_settings")
+    .select("*")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[getBusinessSettings]", error.message);
+    return null;
+  }
+  return data ?? null;
+}
+
+// ─── Employees ────────────────────────────────────────────────────────────────
+
+export async function getEmployees(): Promise<EmployeeRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("employees")
+    .select("*")
+    .order("is_active", { ascending: false })
+    .order("name");
+
+  if (error) {
+    console.error("[getEmployees]", error.message);
     return [];
   }
   return data ?? [];
@@ -67,7 +108,8 @@ export async function getExpenses(
       `
       *,
       categories ( name ),
-      payment_methods ( name )
+      payment_methods ( name ),
+      employees ( name )
       `
     )
     .order("expense_date", { ascending: false });
@@ -93,6 +135,7 @@ export async function getExpenses(
     ...row,
     category_name: row.categories?.name ?? null,
     payment_method_name: row.payment_methods?.name ?? null,
+    employee_name: row.employees?.name ?? null,
   })) as ExpenseWithRefs[];
 }
 

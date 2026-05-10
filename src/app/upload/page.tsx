@@ -21,8 +21,8 @@ export default async function UploadPage() {
 
   return (
     <UploadReceiptShell
-      categoryRows={categoryRows}
-      paymentMethodRows={paymentMethodRows}
+      categoryRows={categoryRows.filter((row) => row.is_active)}
+      paymentMethodRows={paymentMethodRows.filter((row) => row.is_active)}
     />
   );
 }

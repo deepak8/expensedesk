@@ -12,7 +12,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("expenses")
-    .select("*, categories(name), payment_methods(name)")
+    .select("*, categories(name), payment_methods(name), employees(name)")
     .order("expense_date", { ascending: false });
 
   if (error) {
@@ -24,6 +24,7 @@ export async function GET() {
     ...row,
     category_name: row.categories?.name ?? null,
     payment_method_name: row.payment_methods?.name ?? null,
+    employee_name: row.employees?.name ?? null,
   }));
 
   return NextResponse.json(rows);
@@ -43,6 +44,7 @@ export async function POST(req: NextRequest) {
     amount,
     category_id,
     payment_method_id,
+    employee_id,
     expense_type,
     status,
     description,
@@ -106,6 +108,7 @@ export async function POST(req: NextRequest) {
       amount: Number(amount),
       category_id: category_id ? Number(category_id) : null,
       payment_method_id: payment_method_id ? Number(payment_method_id) : null,
+      employee_id: employee_id || null,
       expense_type: (expense_type ?? "manual") as ExpenseType,
       status: normalizedStatus,
       description: description ?? null,

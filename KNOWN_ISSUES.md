@@ -57,6 +57,7 @@ The build script has been changed to `next build --webpack` to work around this.
 - **Phase 3E review/attention system is implemented and tested** for duplicate, payment mismatch, missing proof, low AI confidence, unpaid, and partially paid indicators
 - **Phase 4A monthly reports and CSV exports are implemented and tested** for operational month-end review
 - **Phase 4B Expense Detail Drawer is implemented and tested** with full details, document previews, AI extraction summary, review issues, and edit/mark-paid/delete actions
+- **Phase 4C search, expanded filters, quick view chips, URL query sync, result summary totals, and improved empty states are implemented and tested** on the Expenses page
 
 ### Recommendation
 
@@ -99,6 +100,16 @@ Duplicate detection is intentionally heuristic:
 - Soft duplicate: same vendor, same amount, and expense date within 2 days
 
 These warnings guide review but do not block saving. During create/save, likely duplicates may be saved with `status = needs_review`; existing rows are also evaluated on the Expenses page and Dashboard.
+
+---
+
+## Phase 4C Search / Filters Notes
+
+Expense search and filtering are intentionally client-side over the currently loaded expense rows. Search matches vendor, description, invoice number, payment reference, amount, paid amount, category, payment method, and notes.
+
+Quick view chips are local UI presets only. They are not persisted saved views and do not require a database table. Key search/filter state syncs to the `/expenses` query string for refresh/share continuity.
+
+Do not add full-text search infrastructure, external search services, or persisted saved-view tables unless the dataset or product requirements outgrow the current client-side approach.
 
 ---
 

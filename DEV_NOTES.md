@@ -137,7 +137,7 @@ npm run start -- -p 3001
 
 Production mode uses `next start`, which serves the pre-built output without Turbopack. The server is stable and does not suffer from the SST cache corruption issues seen in dev mode.
 
-Latest audit result: production mode passed sign-in, dashboard, expenses, upload page, unpaid invoice save, unpaid invoice listing, mark-paid with payment proof upload, payment proof preview, and original invoice/receipt preview. Phase 3D flexible capture, Phase 3E review/attention, Phase 4A monthly reports/CSV exports, and Phase 4B Expense Detail Drawer have also been implemented and tested. The audit test data from the earlier production-mode pass was cleaned up afterward.
+Latest audit result: production mode passed sign-in, dashboard, expenses, upload page, unpaid invoice save, unpaid invoice listing, mark-paid with payment proof upload, payment proof preview, and original invoice/receipt preview. Phase 3D flexible capture, Phase 3E review/attention, Phase 4A monthly reports/CSV exports, Phase 4B Expense Detail Drawer, and Phase 4C search/filters/quick views have also been implemented and tested. The audit test data from the earlier production-mode pass was cleaned up afterward.
 
 ---
 
@@ -205,6 +205,14 @@ If production output looks inconsistent, confirm no process is running `next dev
 - It reuses existing signed document preview, edit, mark-paid, and delete flows.
 - It displays compact `raw_ai_json` fields and `fields_needing_review`; do not replace this with a large raw JSON dump by default.
 
+### Expense Search / Filters / Quick Views
+- Phase 4C search and filters live in `src/components/expenses/ExpensesTable.tsx`.
+- Filtering is intentionally client-side over the currently loaded expenses; do not add full-text search, external search services, or a saved views table for the current scope.
+- Search matches vendor, description, invoice number, payment reference, amount, paid amount, category, payment method, and notes.
+- Key filters and search sync to `/expenses` URL query params for refresh/share continuity.
+- Quick view chips are local UI presets, not persisted saved views.
+- Result summary totals are derived from the filtered rows.
+
 ### Instrumentation
 - `src/instrumentation.ts` absorbs transient ETIMEDOUT/ECONNRESET socket errors from the Supabase client
 - These errors are Supabase free-tier cold-start artifacts, not application bugs
@@ -219,6 +227,12 @@ If production output looks inconsistent, confirm no process is running `next dev
 - [ ] Dashboard loads with live chart data
 - [ ] Dashboard Needs Attention queue shows unpaid/partial/duplicate/low-confidence/mismatch/missing-proof items where present
 - [ ] Expenses page loads with expense rows
+- [ ] Expenses global search works for vendor, invoice number, payment reference, amount, category, payment method, and notes
+- [ ] Expenses expanded filters work together: month/date range/category/method/payment/document/expense/review/document state
+- [ ] Expenses quick view chips apply expected local presets
+- [ ] Expenses URL query state preserves key search/filter values after refresh
+- [ ] Expenses result summary updates row count, total, paid, and unpaid amounts
+- [ ] Expenses empty states show useful copy and Clear filters when applicable
 - [ ] Expenses Attention badges render compactly
 - [ ] Expenses Review filter works for possible duplicate, missing proof, amount mismatch, and low AI confidence
 - [ ] Click View Details in Expenses -> detail drawer opens

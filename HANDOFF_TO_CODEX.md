@@ -2,11 +2,11 @@
 
 ## Project Summary
 
-ExpenseDesk is a small-business expense management app built with Next.js 16.2.6 (App Router), Supabase (auth, database, storage), and OpenAI (receipt extraction). The app supports bill/invoice capture, receipt/payment proof upload, AI-powered data extraction with mandatory user review, expense CRUD, salary tracking, invoice payment status, flexible bill/payment capture, a lightweight review/attention queue, monthly reports with CSV exports, and an Expense Detail Drawer for inspecting individual records.
+ExpenseDesk is a small-business expense management app built with Next.js 16.2.6 (App Router), Supabase (auth, database, storage), and OpenAI (receipt extraction). The app supports bill/invoice capture, receipt/payment proof upload, AI-powered data extraction with mandatory user review, expense CRUD, salary tracking, invoice payment status, flexible bill/payment capture, a lightweight review/attention queue, monthly reports with CSV exports, an Expense Detail Drawer for inspecting individual records, and Expenses-page search/filter quick views.
 
 ## Current Status
 
-- **All application code is written** through Phase 4B (Expense Detail Drawer)
+- **All application code is written** through Phase 4C (Search, Filters, and Saved Views-style quick views)
 - **TypeScript compiles cleanly** (`npx tsc --noEmit` passes)
 - **Production build passes** (`npm run build` with `--webpack` flag)
 - **Production-mode audit passed** for the core Phase 3C flows
@@ -15,6 +15,7 @@ ExpenseDesk is a small-business expense management app built with Next.js 16.2.6
 - **Phase 3E review/attention system is implemented and tested**
 - **Phase 4A monthly reports and CSV exports are implemented and tested**
 - **Phase 4B Expense Detail Drawer is implemented and tested**
+- **Phase 4C search, expanded filters, quick view chips, URL query sync, result summary totals, and improved empty states are implemented and tested**
 - **MarkPaidModal FormData bug is fixed**
 - **Audit test data has been cleaned up** from the current Supabase database and `receipts` bucket
 - **Dev server (Turbopack) has been unreliable** — repeated crashes with manifest/cache errors that are not caused by application code
@@ -43,6 +44,8 @@ Phase 4A added monthly reports and CSV exports. The Reports page now includes a 
 
 Phase 4B added an Expense Detail Drawer. The Expenses table has a View Details action that opens a right-side drawer showing full expense, payment, and document fields; primary document and payment proof preview actions; AI extraction confidence and compact summary; derived review issues; and actions for edit, mark-paid, and delete using the existing flows.
 
+Phase 4C improved expense finding and filtering. The Expenses page now has global search across vendor, description, invoice number, payment reference, amount, paid amount, category, payment method, and notes. It also has expanded filters, quick view chips for common local presets, URL query syncing for key filters/search, filtered result summary totals, and more specific empty states with clear-filter actions.
+
 ---
 
 ## Exact Next Steps
@@ -63,7 +66,7 @@ Open http://localhost:3001 and confirm the server starts without errors. This is
 ### Step 2: Continue product work from the verified baseline
 
 Production mode is currently verified. If continuing product work, keep using production mode for verification unless dev/Turbopack instability is explicitly being investigated. Good next candidates:
-- Polish detail/report/review UX based on real usage
+- Polish detail/report/review/search UX based on real usage
 - Improve AI extraction quality and payment-proof extraction if needed
 - Or whatever the next priority is
 
@@ -97,8 +100,14 @@ Latest production-mode audit passed these checks:
 - [x] Detail drawer reuses primary document and payment proof preview
 - [x] Detail drawer shows AI extraction summary and review issues
 - [x] Detail drawer exposes edit, mark-paid, and delete actions
+- [x] Global expense search implemented
+- [x] Expanded Expenses filters implemented
+- [x] Quick view chips implemented as local presets
+- [x] Key Expenses search/filter state syncs to URL query params
+- [x] Filtered result summary totals implemented
+- [x] Improved empty states implemented
 
-Not part of the earlier production audit pass: add/edit/delete manual expense, AI extraction, salary page, and invalid sign-in. Phase 3D, Phase 3E, Phase 4A, and Phase 4B have since been implemented and tested.
+Not part of the earlier production audit pass: add/edit/delete manual expense, AI extraction, salary page, and invalid sign-in. Phase 3D, Phase 3E, Phase 4A, Phase 4B, and Phase 4C have since been implemented and tested.
 
 ---
 

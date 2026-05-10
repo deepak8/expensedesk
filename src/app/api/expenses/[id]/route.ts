@@ -22,6 +22,7 @@ export async function PATCH(
     amount,
     category_id,
     payment_method_id,
+    employee_id,
     expense_type,
     status,
     description,
@@ -65,6 +66,7 @@ export async function PATCH(
       paid_amount: paid_amount != null ? Number(paid_amount) : null,
       payment_reference: payment_reference ?? null,
       payment_proof_file_path: payment_proof_file_path ?? null,
+      ...(employee_id !== undefined ? { employee_id: employee_id || null } : {}),
     })
     .eq("id", id)
     .select()

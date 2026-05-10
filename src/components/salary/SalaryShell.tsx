@@ -14,6 +14,7 @@ import {
 import { Plus, Users, TrendingUp, CheckCircle, Clock, Pencil, Trash2 } from "lucide-react";
 import Header from "@/components/Header";
 import SalaryFormModal from "./SalaryFormModal";
+import EmployeeFormModal from "./EmployeeFormModal";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +24,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { deleteExpenseAction } from "@/app/expenses/actions";
-import type { ExpenseWithRefs, PaymentMethodRow } from "@/lib/supabase/types";
+import { setEmployeeActiveAction } from "@/app/salary/actions";
+import type { ExpenseWithRefs, PaymentMethodRow, EmployeeRow } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -31,6 +33,7 @@ import { cn } from "@/lib/utils";
 interface Props {
   salaryRows: ExpenseWithRefs[];
   paymentMethodRows: PaymentMethodRow[];
+  employeeRows: EmployeeRow[];
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -89,12 +92,16 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 // ─── Shell ────────────────────────────────────────────────────────────────────
 
-export default function SalaryShell({ salaryRows, paymentMethodRows }: Props) {
+export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRows }: Props) {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<"payments" | "employees">("payments");
 
   // Modal state
   const [formOpen, setFormOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<ExpenseWithRefs | undefined>();
+  const [employeeFormOpen, setEmployeeFormOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<EmployeeRow | undefined>();
+  const [employeeError, setEmployeeError] = useState<string | null>(null);
 
   // Delete confirmation state
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -133,9 +140,21 @@ export default function SalaryShell({ salaryRows, paymentMethodRows }: Props) {
     setFormOpen(true);
   }
 
+  function openAddEmployee() {
+    setEditingEmployee(undefined);
+    setEmployeeError(null);
+    setEmployeeFormOpen(true);
+  }
+
   function openEdit(expense: ExpenseWithRefs) {
     setEditingExpense(expense);
     setFormOpen(true);
+  }
+
+  function openEditEmployee(employee: EmployeeRow) {
+    setEditingEmployee(employee);
+    setEmployeeError(null);
+    setEmployeeFormOpen(true);
   }
 
   function openDelete(expense: ExpenseWithRefs) {
@@ -158,23 +177,64 @@ export default function SalaryShell({ salaryRows, paymentMethodRows }: Props) {
     }
   }
 
+  async function toggleEmployeeActive(employee: EmployeeRow) {
+    setEmployeeError(null);
+    const result = await setEmployeeActiveAction(employee.id, !employee.is_active);
+    if (result.error) {
+      setEmployeeError(result.error);
+      return;
+    }
+    router.refresh();
+  }
+
   return (
     <div className="flex flex-col min-h-screen">
       <Header
         title="Salary Expenses"
-        subtitle={`${currentMonthLabel()} · ${headcount} employee${headcount !== 1 ? "s" : ""}`}
+        subtitle={
+          activeTab === "payments"
+            ? `${currentMonthLabel()} · ${headcount} payment${headcount !== 1 ? "s" : ""}`
+            : `${employeeRows.filter((employee) => employee.is_active).length} active worker${employeeRows.filter((employee) => employee.is_active).length !== 1 ? "s" : ""}`
+        }
         action={
           <button
-            onClick={openAdd}
+            onClick={activeTab === "payments" ? openAdd : openAddEmployee}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-medium hover:bg-primary/90 transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
-            Add Salary Expense
+            {activeTab === "payments" ? "Add Salary Expense" : "Add Employee"}
           </button>
         }
       />
 
       <div className="p-6 space-y-6 flex-1">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setActiveTab("payments")}
+            className={cn(
+              "rounded-lg px-3 py-2 text-xs font-medium transition-colors",
+              activeTab === "payments"
+                ? "bg-primary text-white"
+                : "border border-border bg-white text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            Salary Payments
+          </button>
+          <button
+            onClick={() => setActiveTab("employees")}
+            className={cn(
+              "rounded-lg px-3 py-2 text-xs font-medium transition-colors",
+              activeTab === "employees"
+                ? "bg-primary text-white"
+                : "border border-border bg-white text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            Employees
+          </button>
+        </div>
+
+        {activeTab === "payments" && (
+          <>
         {/* Summary Cards */}
         <div className="grid grid-cols-4 gap-4">
           <div className="bg-white rounded-xl border border-border p-4 shadow-sm space-y-2">
@@ -391,6 +451,117 @@ export default function SalaryShell({ salaryRows, paymentMethodRows }: Props) {
             </>
           )}
         </div>
+          </>
+        )}
+
+        {activeTab === "employees" && (
+          <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Employees & Contractors</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Lightweight directory for salary expense entry
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {employeeRows.length} record{employeeRows.length !== 1 ? "s" : ""}
+              </p>
+            </div>
+
+            {employeeError && (
+              <div className="m-5 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                {employeeError}
+              </div>
+            )}
+
+            {employeeRows.length === 0 ? (
+              <div className="px-5 py-12 text-center">
+                <p className="text-sm text-muted-foreground">No employees or contractors yet.</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Add a worker to prefill salary payments.
+                </p>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/40">
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground">Name</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground">Type</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground">Role / Department</th>
+                    <th className="text-right px-5 py-3 text-xs font-semibold text-muted-foreground">Default Salary</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground">Payment Method</th>
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground">Status</th>
+                    <th className="px-5 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {employeeRows.map((employee) => {
+                    const method = paymentMethodRows.find((row) => row.id === employee.default_payment_method_id);
+                    return (
+                      <tr key={employee.id} className="hover:bg-muted/20 transition-colors group">
+                        <td className="px-5 py-3">
+                          <div>
+                            <p className="text-xs font-medium text-foreground">{employee.name}</p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {employee.email || employee.phone || "No contact saved"}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3 text-xs text-muted-foreground capitalize">
+                          {employee.worker_type.replace("_", " ")}
+                        </td>
+                        <td className="px-5 py-3 text-xs text-muted-foreground">
+                          {[employee.role, employee.department].filter(Boolean).join(" / ") || "—"}
+                        </td>
+                        <td className="px-5 py-3 text-right text-xs font-semibold text-foreground">
+                          {employee.default_salary == null ? "—" : fmt(Number(employee.default_salary))}
+                        </td>
+                        <td className="px-5 py-3 text-xs text-muted-foreground">
+                          {method?.name ?? "—"}
+                        </td>
+                        <td className="px-5 py-3">
+                          <span
+                            className={cn(
+                              "text-[11px] px-2 py-0.5 rounded-md border font-medium",
+                              employee.is_active
+                                ? "bg-green-50 text-green-700 border-green-200"
+                                : "bg-gray-100 text-gray-600 border-gray-200"
+                            )}
+                          >
+                            {employee.is_active ? "Active" : "Inactive"}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-1 justify-end">
+                            <button
+                              onClick={() => openEditEmployee(employee)}
+                              title="Edit"
+                              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => toggleEmployeeActive(employee)}
+                              title={employee.is_active ? "Deactivate" : "Reactivate"}
+                              className={cn(
+                                "h-7 rounded-lg px-2 text-[11px] font-medium transition-colors",
+                                employee.is_active
+                                  ? "text-amber-700 hover:bg-amber-50"
+                                  : "text-green-700 hover:bg-green-50"
+                              )}
+                            >
+                              {employee.is_active ? "Deactivate" : "Reactivate"}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Form Modal */}
@@ -398,6 +569,14 @@ export default function SalaryShell({ salaryRows, paymentMethodRows }: Props) {
         open={formOpen}
         onOpenChange={setFormOpen}
         expense={editingExpense}
+        paymentMethodRows={paymentMethodRows}
+        employeeRows={employeeRows}
+      />
+
+      <EmployeeFormModal
+        open={employeeFormOpen}
+        onOpenChange={setEmployeeFormOpen}
+        employee={editingEmployee}
         paymentMethodRows={paymentMethodRows}
       />
 

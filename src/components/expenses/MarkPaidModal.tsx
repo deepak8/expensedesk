@@ -68,6 +68,7 @@ export default function MarkPaidModal({
   onSaved,
 }: Props) {
   const today = new Date().toISOString().split("T")[0];
+  const activePaymentMethods = paymentMethodRows.filter((method) => method.is_active);
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [proofFile, setProofFile] = useState<File | null>(null);
@@ -141,7 +142,7 @@ export default function MarkPaidModal({
       const result = await extractReceiptAction(
         path,
         [],
-        paymentMethodRows.map((m) => m.name)
+        activePaymentMethods.map((m) => m.name)
       );
 
       if (result.error || !result.data) {
@@ -149,7 +150,7 @@ export default function MarkPaidModal({
       }
 
       const ai = result.data;
-      const matchedMethod = paymentMethodRows.find(
+      const matchedMethod = activePaymentMethods.find(
         (m) => m.name.toLowerCase() === ai.payment_method_guess?.toLowerCase()
       );
 
@@ -285,7 +286,7 @@ export default function MarkPaidModal({
                 className={selectCls}
               >
                 <option value="">Select…</option>
-                {paymentMethodRows.map((m) => (
+                {activePaymentMethods.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name}
                   </option>

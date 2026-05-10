@@ -35,6 +35,7 @@ It is **not** a full accounting platform, payroll system, or GST/tax tool.
 - Phase 3E review/attention system is implemented and tested: possible duplicate detection, low AI confidence indicators, unpaid/partially paid invoice attention items, payment amount mismatch warnings, and missing proof warnings.
 - Phase 4A monthly reports and CSV exports are implemented and tested for month-end review.
 - Phase 4B Expense Detail Drawer is implemented and tested, with full details, document previews, AI summary, review issues, and edit/mark-paid/delete actions.
+- Phase 4C search, filters, and saved-view-style quick views are implemented and tested on the Expenses page.
 - Audit test data created during the production-mode audit was cleaned up: the two audit expense rows and four audit receipt/payment-proof storage files were deleted.
 - The major local instability was traced to corrupted/stale `.next` output plus conflicting Claude launch configs. A clean rebuild restored production mode:
 
@@ -69,7 +70,12 @@ npm run start -- -p 3001
 ### Expenses List
 - Client component at `src/components/expenses/ExpensesTable.tsx`
 - Self-fetching: loads expenses, categories, and payment methods via `fetch` to API routes
-- Filtering by category, payment method, status, payment status, and review/attention issue
+- Global search matches vendor, description, invoice number, payment reference, amount, paid amount, category name, payment method name, and notes
+- Expanded filters include month, date range, category, payment method, status, payment status, document type, expense type, review issue, and document/proof state
+- Quick view chips set common local presets: This Month, Last Month, Last 3 Months, Unpaid, Needs Attention, Paid This Month, and Salary This Month
+- Key search/filter state is synced to the URL query string for refresh/share continuity
+- Result summary shows filtered row count, total amount, paid amount, and unpaid amount
+- Empty states distinguish no search results, no unpaid invoices, no expenses for selected month, and general no-match filter results
 - Attention badges include Needs Review, Possible Duplicate, Unpaid, Partially Paid, Amount Mismatch, Missing Proof, and Low AI Confidence
 - Table includes Date, Vendor, Category, Description, Method, Amount, Docs, Attention, Status, Payment, and Actions
 - Actions include View Details, Edit, Mark Paid when relevant, and Delete

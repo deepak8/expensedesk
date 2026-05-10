@@ -69,6 +69,8 @@ export default function ExpenseFormModal({
   onSaved,
 }: Props) {
   const isEdit = !!expense;
+  const categoryOptions = categoryRows.filter((category) => category.is_active || category.id === expense?.category_id);
+  const paymentMethodOptions = paymentMethodRows.filter((method) => method.is_active || method.id === expense?.payment_method_id);
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -223,7 +225,7 @@ export default function ExpenseFormModal({
                   className={selectCls}
                 >
                   <option value="">Select…</option>
-                  {categoryRows.map((c) => (
+                  {categoryOptions.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
@@ -236,7 +238,7 @@ export default function ExpenseFormModal({
                   className={selectCls}
                 >
                   <option value="">Select…</option>
-                  {paymentMethodRows.map((m) => (
+                  {paymentMethodOptions.map((m) => (
                     <option key={m.id} value={m.id}>{m.name}</option>
                   ))}
                 </select>

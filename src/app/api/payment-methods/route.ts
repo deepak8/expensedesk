@@ -8,7 +8,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("payment_methods")
-    .select("id, name")
+    .select("id, name, is_active")
     .order("name");
 
   if (error) {
