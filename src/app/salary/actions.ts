@@ -175,6 +175,15 @@ export async function updateSalaryAction(
   return { success: true };
 }
 
+export async function saveSalaryAction(
+  prev: SalaryActionState | null,
+  formData: FormData
+): Promise<SalaryActionState> {
+  const mode = (formData.get("salary_form_mode") as string | null)?.trim();
+  if (mode === "edit") return updateSalaryAction(prev, formData);
+  return createSalaryAction(prev, formData);
+}
+
 function parseEmployeeFormData(formData: FormData) {
   return {
     name: (formData.get("name") as string | null)?.trim() ?? "",

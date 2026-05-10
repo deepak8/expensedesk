@@ -151,6 +151,11 @@ export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRow
     setFormOpen(true);
   }
 
+  function handleSalaryFormOpenChange(open: boolean) {
+    setFormOpen(open);
+    if (!open) setEditingExpense(undefined);
+  }
+
   function openEditEmployee(employee: EmployeeRow) {
     setEditingEmployee(employee);
     setEmployeeError(null);
@@ -566,8 +571,9 @@ export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRow
 
       {/* Form Modal */}
       <SalaryFormModal
+        key={editingExpense?.id ?? "new"}
         open={formOpen}
-        onOpenChange={setFormOpen}
+        onOpenChange={handleSalaryFormOpenChange}
         expense={editingExpense}
         paymentMethodRows={paymentMethodRows}
         employeeRows={employeeRows}

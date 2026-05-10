@@ -12,8 +12,7 @@ import {
   DialogCloseButton,
 } from "@/components/ui/dialog";
 import {
-  createSalaryAction,
-  updateSalaryAction,
+  saveSalaryAction,
   type SalaryActionState,
 } from "@/app/salary/actions";
 import type { PaymentMethodRow, ExpenseWithRefs, EmployeeRow } from "@/lib/supabase/types";
@@ -97,9 +96,8 @@ export default function SalaryFormModal({
   const [amount, setAmount] = useState(expense?.amount != null ? String(expense.amount) : "");
   const [paymentMethodId, setPaymentMethodId] = useState(expense?.payment_method_id != null ? String(expense.payment_method_id) : "");
 
-  const action = isEdit ? updateSalaryAction : createSalaryAction;
   const [state, formAction, isPending] = useActionState<SalaryActionState | null, FormData>(
-    action,
+    saveSalaryAction,
     null
   );
 
@@ -154,9 +152,8 @@ export default function SalaryFormModal({
         </DialogHeader>
 
         <form ref={formRef} action={formAction}>
-          {isEdit && (
-            <input type="hidden" name="expense_id" value={expense.id} />
-          )}
+          <input type="hidden" name="salary_form_mode" value={isEdit ? "edit" : "create"} />
+          <input type="hidden" name="expense_id" value={expense?.id ?? ""} />
 
           <DialogBody className="space-y-4">
             {state?.error && (
@@ -193,7 +190,7 @@ export default function SalaryFormModal({
                   disabled={isPending}
                   value={vendor}
                   onChange={(event) => setVendor(event.target.value)}
-                  placeholder="e.g. Rahul Sharma"
+                  placeholder="e.g. Kumar"
                   className={inputCls}
                 />
               </FormField>
