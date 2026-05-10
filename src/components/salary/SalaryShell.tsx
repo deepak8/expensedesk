@@ -68,14 +68,14 @@ function deriveTrend(rows: ExpenseWithRefs[]): { month: string; total: number }[
 }
 
 const STATUS_DISPLAY: Record<string, { label: string; cls: string }> = {
-  verified: { label: "Verified", cls: "bg-green-50 text-green-700 border-green-200" },
-  draft: { label: "Draft", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  needs_review: { label: "Needs Review", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  missing_receipt: { label: "Missing Receipt", cls: "bg-gray-100 text-gray-600 border-gray-200" },
+  verified: { label: "Verified", cls: "bg-[rgb(176_242_213)] text-foreground border-[rgb(176_242_213)]" },
+  draft: { label: "Draft", cls: "bg-[rgb(254_221_241)] text-foreground border-[rgb(254_221_241)]" },
+  needs_review: { label: "Needs Review", cls: "bg-[rgb(254_221_241)] text-foreground border-[rgb(254_221_241)]" },
+  missing_receipt: { label: "Missing Receipt", cls: "bg-[rgb(248_248_248)] text-muted-foreground border-border" },
 };
 
 function statusDisplay(status: string) {
-  return STATUS_DISPLAY[status] ?? { label: status, cls: "bg-gray-100 text-gray-600 border-gray-200" };
+  return STATUS_DISPLAY[status] ?? { label: status, cls: "bg-[rgb(248_248_248)] text-muted-foreground border-border" };
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -83,9 +83,9 @@ function statusDisplay(status: string) {
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border border-border rounded-lg shadow-md p-3 text-xs">
+    <div className="bg-white border border-border rounded-md shadow-none p-3 text-xs">
       <p className="font-semibold text-foreground mb-1">{label}</p>
-      <p className="text-primary">Total: {fmt(payload[0].value)}</p>
+      <p className="text-muted-foreground">Total: {fmt(payload[0].value)}</p>
     </div>
   );
 };
@@ -188,7 +188,7 @@ export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRow
   }
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen bg-background">
       <Header
         title="Salary Expenses"
         subtitle={
@@ -199,7 +199,7 @@ export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRow
         action={
           <button
             onClick={activeTab === "payments" ? openAdd : openAddEmployee}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-medium hover:bg-primary/90 transition-colors"
+            className="flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
           >
             <Plus className="w-3.5 h-3.5" />
             {activeTab === "payments" ? "Add Salary Expense" : "Add Employee"}
@@ -207,15 +207,15 @@ export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRow
         }
       />
 
-      <div className="p-6 space-y-6 flex-1">
-        <div className="flex items-center gap-2">
+      <div className="px-6 py-5 space-y-6 flex-1">
+        <div className="flex items-center gap-2 border-y border-border py-3">
           <button
             onClick={() => setActiveTab("payments")}
             className={cn(
-              "rounded-lg px-3 py-2 text-xs font-medium transition-colors",
+              "rounded-md border px-3 py-1.5 text-xs font-medium transition-colors",
               activeTab === "payments"
-                ? "bg-primary text-white"
-                : "border border-border bg-white text-muted-foreground hover:bg-muted hover:text-foreground"
+                ? "border-[rgb(191_178_255)] bg-[rgb(191_178_255)] text-foreground"
+                : "border-border bg-white text-muted-foreground hover:bg-[rgb(248_248_248)] hover:text-foreground"
             )}
           >
             Salary Payments
@@ -223,10 +223,10 @@ export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRow
           <button
             onClick={() => setActiveTab("employees")}
             className={cn(
-              "rounded-lg px-3 py-2 text-xs font-medium transition-colors",
+              "rounded-md border px-3 py-1.5 text-xs font-medium transition-colors",
               activeTab === "employees"
-                ? "bg-primary text-white"
-                : "border border-border bg-white text-muted-foreground hover:bg-muted hover:text-foreground"
+                ? "border-[rgb(191_178_255)] bg-[rgb(191_178_255)] text-foreground"
+                : "border-border bg-white text-muted-foreground hover:bg-[rgb(248_248_248)] hover:text-foreground"
             )}
           >
             Employees
@@ -236,59 +236,59 @@ export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRow
         {activeTab === "payments" && (
           <>
         {/* Summary Cards */}
-        <div className="grid grid-cols-4 gap-4">
-          <div className="bg-white rounded-xl border border-border p-4 shadow-sm space-y-2">
+        <div className="grid grid-cols-4 border-y border-border divide-x divide-border">
+          <div className="bg-white p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted-foreground">Total Salary</p>
-              <div className="w-7 h-7 rounded-lg bg-green-50 flex items-center justify-center">
-                <TrendingUp className="w-4 h-4 text-green-600" />
+              <p className="text-[11px] font-semibold uppercase text-muted-foreground">Total Salary</p>
+              <div className="w-7 h-7 rounded-md bg-[rgb(176_242_213)] flex items-center justify-center">
+                <TrendingUp className="w-4 h-4 text-foreground" />
               </div>
             </div>
-            <p className="text-2xl font-semibold text-foreground">{fmt(totalSalary)}</p>
+            <p className="text-[26px] font-semibold text-foreground leading-none">{fmt(totalSalary)}</p>
             <p className="text-xs text-muted-foreground font-medium">this month</p>
           </div>
 
-          <div className="bg-white rounded-xl border border-border p-4 shadow-sm space-y-2">
+          <div className="bg-white p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted-foreground">Headcount</p>
-              <div className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center">
+              <p className="text-[11px] font-semibold uppercase text-muted-foreground">Headcount</p>
+              <div className="w-7 h-7 rounded-md bg-[rgb(248_248_248)] flex items-center justify-center">
                 <Users className="w-4 h-4 text-muted-foreground" />
               </div>
             </div>
-            <p className="text-2xl font-semibold text-foreground">{headcount}</p>
+            <p className="text-[26px] font-semibold text-foreground leading-none">{headcount}</p>
             <p className="text-xs text-muted-foreground font-medium">employees this month</p>
           </div>
 
-          <div className="bg-white rounded-xl border border-border p-4 shadow-sm space-y-2">
+          <div className="bg-white p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted-foreground">Verified</p>
-              <div className="w-7 h-7 rounded-lg bg-green-50 flex items-center justify-center">
-                <CheckCircle className="w-4 h-4 text-green-600" />
+              <p className="text-[11px] font-semibold uppercase text-muted-foreground">Verified</p>
+              <div className="w-7 h-7 rounded-md bg-[rgb(176_242_213)] flex items-center justify-center">
+                <CheckCircle className="w-4 h-4 text-foreground" />
               </div>
             </div>
-            <p className="text-2xl font-semibold text-foreground">{paidCount}</p>
-            <p className="text-xs text-green-600 font-medium">
+            <p className="text-[26px] font-semibold text-foreground leading-none">{paidCount}</p>
+            <p className="text-xs text-muted-foreground font-medium">
               of {headcount} processed
             </p>
           </div>
 
-          <div className="bg-white rounded-xl border border-border p-4 shadow-sm space-y-2">
+          <div className="bg-white p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted-foreground">Pending</p>
-              <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
-                <Clock className="w-4 h-4 text-amber-600" />
+              <p className="text-[11px] font-semibold uppercase text-muted-foreground">Pending</p>
+              <div className="w-7 h-7 rounded-md bg-[rgb(254_221_241)] flex items-center justify-center">
+                <Clock className="w-4 h-4 text-foreground" />
               </div>
             </div>
-            <p className="text-2xl font-semibold text-foreground">{pendingCount}</p>
-            <p className="text-xs text-amber-600 font-medium">awaiting payment</p>
+            <p className="text-[26px] font-semibold text-foreground leading-none">{pendingCount}</p>
+            <p className="text-xs text-muted-foreground font-medium">awaiting payment</p>
           </div>
         </div>
 
         {/* Trend Chart */}
-        <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+        <div className="bg-white border-y border-border py-5">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-sm font-semibold text-foreground">Salary Trend</p>
+              <p className="text-[13px] font-semibold text-foreground">Salary Trend</p>
               <p className="text-xs text-muted-foreground">Last 6 months</p>
             </div>
             {avgMonthly > 0 && (
@@ -299,16 +299,16 @@ export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRow
           </div>
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={trendData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0ede8" vertical={false} />
+              <CartesianGrid stroke="#e8e8e8" vertical={false} />
               <XAxis
                 dataKey="month"
-                tick={{ fontSize: 11, fill: "#9ca3af" }}
+                tick={{ fontSize: 11, fill: "#696969" }}
                 axisLine={false}
                 tickLine={false}
               />
               <YAxis
                 tickFormatter={(v) => "₹" + (v / 1000).toFixed(0) + "k"}
-                tick={{ fontSize: 11, fill: "#9ca3af" }}
+                tick={{ fontSize: 11, fill: "#696969" }}
                 axisLine={false}
                 tickLine={false}
                 width={52}
@@ -317,19 +317,19 @@ export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRow
               <Line
                 type="monotone"
                 dataKey="total"
-                stroke="#4ade80"
+                stroke="#b0f2d5"
                 strokeWidth={2.5}
-                dot={{ fill: "#4ade80", r: 4, strokeWidth: 0 }}
-                activeDot={{ r: 6, fill: "#22c55e" }}
+                dot={{ fill: "#181818", r: 4, strokeWidth: 0 }}
+                activeDot={{ r: 6, fill: "#bfb2ff", stroke: "#181818", strokeWidth: 1 }}
               />
             </LineChart>
           </ResponsiveContainer>
         </div>
 
         {/* Salary Table */}
-        <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
+        <div className="bg-white border-y border-border overflow-hidden">
           <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-            <p className="text-sm font-semibold text-foreground">Salary Details</p>
+            <p className="text-[13px] font-semibold text-foreground">Salary Details</p>
             {tableRows.length > 0 && (
               <p className="text-xs text-muted-foreground">
                 {tableRows.length} record{tableRows.length !== 1 ? "s" : ""}
@@ -346,28 +346,28 @@ export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRow
             </div>
           ) : (
             <>
-              <table className="w-full text-sm">
+              <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-border bg-muted/40">
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground">
+                  <tr className="border-b border-border bg-white">
+                    <th className="text-left px-5 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">
                       Employee
                     </th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground">
+                    <th className="text-left px-5 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">
                       Description
                     </th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground">
+                    <th className="text-left px-5 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">
                       Payment Date
                     </th>
-                    <th className="text-right px-5 py-3 text-xs font-semibold text-muted-foreground">
+                    <th className="text-right px-5 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">
                       Amount
                     </th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground">
+                    <th className="text-left px-5 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">
                       Method
                     </th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground">
+                    <th className="text-left px-5 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">
                       Status
                     </th>
-                    <th className="px-5 py-3" />
+                    <th className="px-5 py-2.5" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -382,11 +382,11 @@ export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRow
                     return (
                       <tr
                         key={row.id}
-                        className="hover:bg-muted/20 transition-colors group"
+                        className="hover:bg-[rgb(248_248_248)] transition-colors group"
                       >
-                        <td className="px-5 py-3">
+                        <td className="px-5 py-2.5">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-[11px] font-semibold text-primary flex-shrink-0">
+                            <div className="w-7 h-7 rounded-full border border-border bg-[rgb(248_248_248)] flex items-center justify-center text-[11px] font-semibold text-foreground flex-shrink-0">
                               {initials}
                             </div>
                             <span className="text-xs font-medium text-foreground">
@@ -394,41 +394,41 @@ export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRow
                             </span>
                           </div>
                         </td>
-                        <td className="px-5 py-3 text-xs text-muted-foreground">
+                        <td className="px-5 py-2.5 text-xs text-muted-foreground">
                           {row.description ?? "—"}
                         </td>
-                        <td className="px-5 py-3 text-xs text-muted-foreground">
+                        <td className="px-5 py-2.5 text-xs text-muted-foreground">
                           {row.expense_date}
                         </td>
-                        <td className="px-5 py-3 text-xs font-semibold text-foreground text-right">
+                        <td className="px-5 py-2.5 text-xs font-semibold text-foreground text-right">
                           {fmt(Number(row.amount))}
                         </td>
-                        <td className="px-5 py-3 text-xs text-muted-foreground">
+                        <td className="px-5 py-2.5 text-xs text-muted-foreground">
                           {row.payment_method_name ?? "—"}
                         </td>
-                        <td className="px-5 py-3">
+                        <td className="px-5 py-2.5">
                           <span
                             className={cn(
-                              "text-[11px] px-2 py-0.5 rounded-md border font-medium",
+                              "text-[10px] px-1.5 py-0.5 rounded-sm border font-medium",
                               sd.cls
                             )}
                           >
                             {sd.label}
                           </span>
                         </td>
-                        <td className="px-5 py-3">
+                        <td className="px-5 py-2.5">
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end">
                             <button
                               onClick={() => openEdit(row)}
                               title="Edit"
-                              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                              className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:bg-[rgb(248_248_248)] hover:text-foreground transition-colors"
                             >
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={() => openDelete(row)}
                               title="Delete"
-                              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-red-50 hover:text-red-600 transition-colors"
+                              className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:bg-[rgb(254_221_241)] hover:text-foreground transition-colors"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -440,7 +440,7 @@ export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRow
                 </tbody>
               </table>
 
-              <div className="px-5 py-3 border-t border-border bg-muted/20 flex items-center justify-between">
+              <div className="px-5 py-3 border-t border-border bg-white flex items-center justify-between">
                 <p className="text-xs text-muted-foreground">
                   {tableRows.length} record{tableRows.length !== 1 ? "s" : ""}
                 </p>
@@ -455,10 +455,10 @@ export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRow
         )}
 
         {activeTab === "employees" && (
-          <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
+          <div className="bg-white border-y border-border overflow-hidden">
             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-foreground">Employees & Contractors</p>
+                <p className="text-[13px] font-semibold text-foreground">Employees & Contractors</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Lightweight directory for salary expense entry
                 </p>
@@ -469,7 +469,7 @@ export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRow
             </div>
 
             {employeeError && (
-              <div className="m-5 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+              <div className="m-5 rounded-md border border-[rgb(254_221_241)] bg-[rgb(254_221_241)] p-3 text-xs text-foreground">
                 {employeeError}
               </div>
             )}
@@ -482,24 +482,24 @@ export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRow
                 </p>
               </div>
             ) : (
-              <table className="w-full text-sm">
+              <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-border bg-muted/40">
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground">Name</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground">Type</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground">Role / Department</th>
-                    <th className="text-right px-5 py-3 text-xs font-semibold text-muted-foreground">Default Salary</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground">Payment Method</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-muted-foreground">Status</th>
-                    <th className="px-5 py-3" />
+                  <tr className="border-b border-border bg-white">
+                    <th className="text-left px-5 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">Name</th>
+                    <th className="text-left px-5 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">Type</th>
+                    <th className="text-left px-5 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">Role / Department</th>
+                    <th className="text-right px-5 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">Default Salary</th>
+                    <th className="text-left px-5 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">Payment Method</th>
+                    <th className="text-left px-5 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">Status</th>
+                    <th className="px-5 py-2.5" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {employeeRows.map((employee) => {
                     const method = paymentMethodRows.find((row) => row.id === employee.default_payment_method_id);
                     return (
-                      <tr key={employee.id} className="hover:bg-muted/20 transition-colors group">
-                        <td className="px-5 py-3">
+                      <tr key={employee.id} className="hover:bg-[rgb(248_248_248)] transition-colors group">
+                        <td className="px-5 py-2.5">
                           <div>
                             <p className="text-xs font-medium text-foreground">{employee.name}</p>
                             <p className="text-[11px] text-muted-foreground">
@@ -507,36 +507,36 @@ export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRow
                             </p>
                           </div>
                         </td>
-                        <td className="px-5 py-3 text-xs text-muted-foreground capitalize">
+                        <td className="px-5 py-2.5 text-xs text-muted-foreground capitalize">
                           {employee.worker_type.replace("_", " ")}
                         </td>
-                        <td className="px-5 py-3 text-xs text-muted-foreground">
+                        <td className="px-5 py-2.5 text-xs text-muted-foreground">
                           {[employee.role, employee.department].filter(Boolean).join(" / ") || "—"}
                         </td>
-                        <td className="px-5 py-3 text-right text-xs font-semibold text-foreground">
+                        <td className="px-5 py-2.5 text-right text-xs font-semibold text-foreground">
                           {employee.default_salary == null ? "—" : fmt(Number(employee.default_salary))}
                         </td>
-                        <td className="px-5 py-3 text-xs text-muted-foreground">
+                        <td className="px-5 py-2.5 text-xs text-muted-foreground">
                           {method?.name ?? "—"}
                         </td>
-                        <td className="px-5 py-3">
+                        <td className="px-5 py-2.5">
                           <span
                             className={cn(
-                              "text-[11px] px-2 py-0.5 rounded-md border font-medium",
+                              "text-[10px] px-1.5 py-0.5 rounded-sm border font-medium",
                               employee.is_active
-                                ? "bg-green-50 text-green-700 border-green-200"
-                                : "bg-gray-100 text-gray-600 border-gray-200"
+                                ? "bg-[rgb(176_242_213)] text-foreground border-[rgb(176_242_213)]"
+                                : "bg-[rgb(248_248_248)] text-muted-foreground border-border"
                             )}
                           >
                             {employee.is_active ? "Active" : "Inactive"}
                           </span>
                         </td>
-                        <td className="px-5 py-3">
+                        <td className="px-5 py-2.5">
                           <div className="flex items-center gap-1 justify-end">
                             <button
                               onClick={() => openEditEmployee(employee)}
                               title="Edit"
-                              className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                              className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:bg-[rgb(248_248_248)] hover:text-foreground transition-colors"
                             >
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
@@ -544,10 +544,10 @@ export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRow
                               onClick={() => toggleEmployeeActive(employee)}
                               title={employee.is_active ? "Deactivate" : "Reactivate"}
                               className={cn(
-                                "h-7 rounded-lg px-2 text-[11px] font-medium transition-colors",
+                                "h-7 rounded-md px-2 text-[11px] font-medium transition-colors",
                                 employee.is_active
-                                  ? "text-amber-700 hover:bg-amber-50"
-                                  : "text-green-700 hover:bg-green-50"
+                                  ? "text-foreground hover:bg-[rgb(254_221_241)]"
+                                  : "text-foreground hover:bg-[rgb(176_242_213)]"
                               )}
                             >
                               {employee.is_active ? "Deactivate" : "Reactivate"}
@@ -600,7 +600,7 @@ export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRow
               <span className="font-semibold">{deleteVendor}</span>? This cannot be undone.
             </p>
             {deleteError && (
-              <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700">
+              <div className="p-3 rounded-md bg-[rgb(254_221_241)] border border-[rgb(254_221_241)] text-xs text-foreground">
                 {deleteError}
               </div>
             )}
@@ -612,14 +612,14 @@ export default function SalaryShell({ salaryRows, paymentMethodRows, employeeRow
                 setDeleteId(null);
                 setDeleteError(null);
               }}
-              className="px-4 py-2 rounded-lg border border-border bg-white text-sm font-medium text-foreground hover:bg-muted disabled:opacity-60 transition-colors"
+              className="px-4 py-2 rounded-md border border-border bg-white text-sm font-medium text-foreground hover:bg-[rgb(248_248_248)] disabled:opacity-60 transition-colors"
             >
               Cancel
             </button>
             <button
               disabled={deleteLoading}
               onClick={confirmDelete}
-              className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-60 transition-colors"
+              className="px-4 py-2 rounded-md bg-foreground text-background text-sm font-medium hover:bg-neutral-700 disabled:opacity-60 transition-colors"
             >
               {deleteLoading ? "Deleting…" : "Delete"}
             </button>

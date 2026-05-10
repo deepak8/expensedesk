@@ -34,17 +34,13 @@ interface ExpenseDetailDrawerProps {
 }
 
 const PAYMENT_STATUS_STYLES: Record<string, string> = {
-  paid: "bg-green-50 text-green-700 border-green-200",
-  unpaid: "bg-orange-50 text-orange-700 border-orange-200",
-  partially_paid: "bg-amber-50 text-amber-700 border-amber-200",
+  paid: "bg-[rgb(176_242_213)] text-foreground border-[rgb(176_242_213)]",
+  unpaid: "bg-[rgb(254_221_241)] text-foreground border-[rgb(254_221_241)]",
+  partially_paid: "bg-[rgb(254_221_241)] text-foreground border-[rgb(254_221_241)]",
 };
 
 const REVIEW_STYLES: Record<ReviewIssue["tone"], string> = {
-  amber: "bg-amber-50 text-amber-700 border-amber-200",
-  orange: "bg-orange-50 text-orange-700 border-orange-200",
-  red: "bg-red-50 text-red-700 border-red-200",
-  blue: "bg-blue-50 text-blue-700 border-blue-200",
-  violet: "bg-violet-50 text-violet-700 border-violet-200",
+  pink: "bg-[rgb(254_221_241)] text-foreground border-[rgb(254_221_241)]",
 };
 
 const AI_SUMMARY_KEYS = [
@@ -110,9 +106,9 @@ function ActionButton({
     <button
       onClick={onClick}
       className={cn(
-        "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors",
+        "inline-flex h-8 items-center justify-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors",
         variant === "danger"
-          ? "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+          ? "border-[rgb(254_221_241)] bg-[rgb(254_221_241)] text-foreground hover:bg-[rgb(248_248_248)]"
           : "border-border bg-white text-foreground hover:bg-muted"
       )}
     >
@@ -165,7 +161,7 @@ export default function ExpenseDetailDrawer({
               </span>
               <span
                 className={cn(
-                  "rounded-md border px-2 py-0.5 text-[11px] font-medium",
+                  "rounded-sm border px-1.5 py-0.5 text-[10px] font-medium",
                   PAYMENT_STATUS_STYLES[paymentStatus] ?? PAYMENT_STATUS_STYLES.paid
                 )}
               >
@@ -179,7 +175,7 @@ export default function ExpenseDetailDrawer({
                   <span
                     key={issue.type}
                     className={cn(
-                      "rounded-md border px-1.5 py-0.5 text-[10px] font-medium",
+                      "rounded-sm border px-1.5 py-0.5 text-[10px] font-medium",
                       REVIEW_STYLES[issue.tone]
                     )}
                   >
@@ -214,12 +210,12 @@ export default function ExpenseDetailDrawer({
               <button
                 disabled={!expense.receipt_file_path}
                 onClick={() => expense.receipt_file_path && onViewDocument(expense.receipt_file_path, primaryDocLabel)}
-                className="flex min-h-20 items-start gap-3 rounded-xl border border-border bg-white p-3 text-left transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-20 items-start gap-3 rounded-md border border-border bg-white p-3 text-left transition-colors hover:bg-[rgb(191_178_255)]/30 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {expense.document_type === "invoice" ? (
-                  <FileText className="mt-0.5 h-4 w-4 text-green-600" />
+                  <FileText className="mt-0.5 h-4 w-4 text-foreground" />
                 ) : (
-                  <Receipt className="mt-0.5 h-4 w-4 text-green-600" />
+                  <Receipt className="mt-0.5 h-4 w-4 text-foreground" />
                 )}
                 <span>
                   <span className="block text-sm font-medium text-foreground">{primaryDocLabel}</span>
@@ -234,9 +230,9 @@ export default function ExpenseDetailDrawer({
                   expense.payment_proof_file_path &&
                   onViewDocument(expense.payment_proof_file_path, "Payment Proof")
                 }
-                className="flex min-h-20 items-start gap-3 rounded-xl border border-border bg-white p-3 text-left transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-20 items-start gap-3 rounded-md border border-border bg-white p-3 text-left transition-colors hover:bg-[rgb(191_178_255)]/30 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <CheckCircle className="mt-0.5 h-4 w-4 text-blue-600" />
+                <CheckCircle className="mt-0.5 h-4 w-4 text-foreground" />
                 <span>
                   <span className="block text-sm font-medium text-foreground">Payment Proof</span>
                   <span className="mt-1 block text-xs text-muted-foreground">
@@ -256,16 +252,16 @@ export default function ExpenseDetailDrawer({
                     className={cn(
                       "rounded-md border px-2 py-0.5 text-[11px] font-semibold",
                       (expense.ai_confidence ?? 0) >= 0.85
-                        ? "border-green-200 bg-green-50 text-green-700"
-                        : "border-amber-200 bg-amber-50 text-amber-700"
+                        ? "border-[rgb(176_242_213)] bg-[rgb(176_242_213)] text-foreground"
+                        : "border-[rgb(254_221_241)] bg-[rgb(254_221_241)] text-foreground"
                     )}
                   >
                     {expense.ai_confidence == null ? "Not stored" : `${Math.round(expense.ai_confidence * 100)}%`}
                   </span>
                 </div>
                 {aiFields.length > 0 && (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                    <div className="flex items-center gap-2 text-xs font-medium text-amber-800">
+                  <div className="rounded-md border border-[rgb(254_221_241)] bg-[rgb(254_221_241)] p-3">
+                    <div className="flex items-center gap-2 text-xs font-medium text-foreground">
                       <AlertTriangle className="h-3.5 w-3.5" />
                       Fields needing review
                     </div>
@@ -273,7 +269,7 @@ export default function ExpenseDetailDrawer({
                       {aiFields.map((field) => (
                         <span
                           key={field}
-                          className="rounded-md border border-amber-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
+                          className="rounded-sm border border-border bg-white px-1.5 py-0.5 text-[10px] font-medium text-foreground"
                         >
                           {titleCase(field)}
                         </span>
@@ -282,7 +278,7 @@ export default function ExpenseDetailDrawer({
                   </div>
                 )}
                 {aiRows.length > 0 && (
-                  <div className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-muted/20 p-3">
+                  <div className="grid grid-cols-2 gap-3 rounded-md border border-border bg-[rgb(248_248_248)] p-3">
                     {aiRows.map(({ key, value }) => (
                       <DetailField key={key} label={titleCase(key)} value={String(value)} />
                     ))}
@@ -301,7 +297,7 @@ export default function ExpenseDetailDrawer({
                   <div
                     key={issue.type}
                     className={cn(
-                      "rounded-lg border px-3 py-2 text-sm font-medium",
+                      "rounded-md border px-3 py-2 text-sm font-medium",
                       REVIEW_STYLES[issue.tone]
                     )}
                   >

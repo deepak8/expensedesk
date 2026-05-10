@@ -17,7 +17,7 @@ function DialogBackdrop({ className, ...props }: React.ComponentProps<typeof Dia
   return (
     <DialogPrimitive.Backdrop
       className={cn(
-        "fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px]",
+        "fixed inset-0 z-40 bg-black/25 backdrop-blur-[1px]",
         "data-open:animate-in data-open:fade-in-0",
         "data-closed:animate-out data-closed:fade-out-0",
         "duration-150",
@@ -39,7 +39,7 @@ function DialogContent({
       <DialogPrimitive.Popup
         className={cn(
           "fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2",
-          "w-full max-w-lg bg-white rounded-xl border border-border shadow-lg",
+          "w-full max-w-lg bg-white rounded-lg border border-border shadow-none",
           "max-h-[90vh] overflow-y-auto",
           "data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-open:slide-in-from-top-[2%]",
           "data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
@@ -66,7 +66,7 @@ function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
   return (
     <DialogPrimitive.Title
-      className={cn("text-[15px] font-semibold text-foreground", className)}
+      className={cn("text-[14px] font-semibold text-foreground", className)}
       {...props}
     />
   );
@@ -80,7 +80,7 @@ function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
   return (
     <div
       className={cn(
-        "flex items-center justify-end gap-2 px-5 py-4 border-t border-border bg-muted/20",
+        "flex items-center justify-end gap-2 px-5 py-4 border-t border-border bg-white",
         className
       )}
       {...props}

@@ -35,10 +35,10 @@ interface Props {
 }
 
 const inputCls =
-  "w-full h-9 px-3 text-sm rounded-lg border border-border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors disabled:opacity-60";
+  "w-full h-9 px-3 text-sm rounded-md border border-border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10 focus:border-foreground transition-colors disabled:opacity-60";
 
 const selectCls =
-  "w-full h-9 px-3 text-sm rounded-lg border border-border bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors disabled:opacity-60 appearance-none cursor-pointer";
+  "w-full h-9 px-3 text-sm rounded-md border border-border bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10 focus:border-foreground transition-colors disabled:opacity-60 appearance-none cursor-pointer";
 
 function FormField({
   label,
@@ -53,7 +53,7 @@ function FormField({
     <div>
       <label className="block text-xs font-medium text-foreground mb-1.5">
         {label}
-        {required && <span className="text-red-500 ml-0.5">*</span>}
+        {required && <span className="text-foreground ml-0.5">*</span>}
       </label>
       {children}
     </div>
@@ -224,7 +224,7 @@ export default function MarkPaidModal({
         <form onSubmit={handleSubmit}>
           <DialogBody className="space-y-4">
             {/* Expense summary */}
-            <div className="p-3 rounded-lg bg-muted/50 border border-border">
+            <div className="p-3 rounded-md bg-[rgb(248_248_248)] border border-border">
               <p className="text-sm font-medium text-foreground">{expense.vendor}</p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {expense.date} · ₹{expense.amount.toLocaleString("en-IN")}
@@ -232,7 +232,7 @@ export default function MarkPaidModal({
             </div>
 
             {error && (
-              <div className="p-3 rounded-lg bg-red-50 border border-red-200 flex items-start gap-2 text-xs text-red-700">
+              <div className="p-3 rounded-md bg-[rgb(254_221_241)] border border-[rgb(254_221_241)] flex items-start gap-2 text-xs text-foreground">
                 <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                 {error}
               </div>
@@ -271,7 +271,7 @@ export default function MarkPaidModal({
             </div>
 
             {showAmountWarning && (
-              <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2 text-xs text-amber-800">
+              <div className="p-2.5 rounded-md bg-[rgb(254_221_241)] border border-[rgb(254_221_241)] flex items-start gap-2 text-xs text-foreground">
                 <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                 Paid amount differs from invoice amount.
               </div>
@@ -310,7 +310,7 @@ export default function MarkPaidModal({
             <FormField label="Upload Payment Proof (optional)">
               <div className="flex items-center gap-3 flex-wrap">
                 <label
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-white text-xs font-medium text-foreground hover:bg-muted transition-colors cursor-pointer ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-white text-xs font-medium text-foreground hover:bg-[rgb(248_248_248)] transition-colors cursor-pointer ${
                     isPending ? "opacity-60 pointer-events-none" : ""
                   }`}
                 >
@@ -334,7 +334,7 @@ export default function MarkPaidModal({
                     type="button"
                     disabled={isPending || extractingProof || uploadingProof}
                     onClick={handleExtractProof}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium hover:bg-violet-700 disabled:opacity-60 transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[rgb(191_178_255)] text-foreground text-xs font-semibold transition-opacity hover:opacity-90 disabled:opacity-60"
                   >
                     {extractingProof || uploadingProof ? (
                       <>
@@ -360,7 +360,7 @@ export default function MarkPaidModal({
                 placeholder="Optional"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors resize-none disabled:opacity-60"
+                className="w-full px-3 py-2 text-sm rounded-md border border-border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10 focus:border-foreground transition-colors resize-none disabled:opacity-60"
               />
             </FormField>
           </DialogBody>
@@ -370,14 +370,14 @@ export default function MarkPaidModal({
               type="button"
               disabled={isPending}
               onClick={handleClose}
-              className="px-4 py-2 rounded-lg border border-border bg-white text-sm font-medium text-foreground hover:bg-muted disabled:opacity-60 transition-colors"
+              className="px-4 py-2 rounded-md border border-border bg-white text-sm font-medium text-foreground hover:bg-[rgb(248_248_248)] disabled:opacity-60 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isPending}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-60 transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-60"
             >
               {isPending ? (
                 <>

@@ -108,7 +108,7 @@ export default function ReceiptPreviewModal({
           {/* Error */}
           {!loading && error && (
             <div className="flex flex-col items-center gap-4 py-10 px-5">
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 w-full">
+              <div className="flex items-start gap-2 p-3 rounded-md bg-[rgb(254_221_241)] border border-[rgb(254_221_241)] text-xs text-foreground w-full">
                 <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                 {error}
               </div>
@@ -125,7 +125,7 @@ export default function ReceiptPreviewModal({
               <img
                 src={signedUrl}
                 alt={`Receipt for ${vendor}`}
-                className="w-full rounded-lg object-contain max-h-[65vh] border border-border"
+                className="w-full rounded-md object-contain max-h-[65vh] border border-border"
               />
               <div className="flex items-center justify-between">
                 <p className="text-xs text-muted-foreground truncate">{fileName}</p>
@@ -133,7 +133,7 @@ export default function ReceiptPreviewModal({
                   href={signedUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-xs text-primary hover:underline flex-shrink-0 ml-2"
+                  className="flex items-center gap-1 text-xs text-foreground hover:underline flex-shrink-0 ml-2"
                 >
                   <ExternalLink className="w-3 h-3" />
                   Open full size
@@ -164,14 +164,14 @@ export default function ReceiptPreviewModal({
                 href={signedUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-white text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-white text-xs font-medium text-foreground hover:bg-[rgb(248_248_248)] transition-colors"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 Open in new tab
               </a>
             )}
             <DialogClose
-              className="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-medium hover:bg-primary/90 transition-colors"
+              className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-semibold transition-opacity hover:opacity-90"
             >
               Close
             </DialogClose>

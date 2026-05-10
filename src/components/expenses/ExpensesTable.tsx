@@ -67,11 +67,11 @@ const ALL_DOCUMENT_TYPES = "All Document Types";
 const ALL_EXPENSE_TYPES = "All Expense Types";
 
 const STATUS_STYLES: Record<DisplayExpense["status"], string> = {
-  Verified: "bg-green-50 text-green-700 border-green-200",
-  "Needs Review": "bg-amber-50 text-amber-700 border-amber-200",
-  Pending: "bg-gray-100 text-gray-600 border-gray-200",
-  Draft: "bg-gray-100 text-gray-500 border-gray-200",
-  "Missing Receipt": "bg-red-50 text-red-600 border-red-200",
+  Verified: "bg-[rgb(176_242_213)] text-foreground border-[rgb(176_242_213)]",
+  "Needs Review": "bg-[rgb(254_221_241)] text-foreground border-[rgb(254_221_241)]",
+  Pending: "bg-[rgb(248_248_248)] text-muted-foreground border-border",
+  Draft: "bg-[rgb(248_248_248)] text-muted-foreground border-border",
+  "Missing Receipt": "bg-[rgb(254_221_241)] text-foreground border-[rgb(254_221_241)]",
 };
 
 const STATUS_MAP: Record<string, DisplayExpense["status"]> = {
@@ -82,9 +82,9 @@ const STATUS_MAP: Record<string, DisplayExpense["status"]> = {
 };
 
 const PAYMENT_STATUS_STYLES: Record<DisplayExpense["paymentStatus"], string> = {
-  Paid: "bg-green-50 text-green-700 border-green-200",
-  Unpaid: "bg-orange-50 text-orange-700 border-orange-200",
-  "Partially Paid": "bg-amber-50 text-amber-700 border-amber-200",
+  Paid: "bg-[rgb(176_242_213)] text-foreground border-[rgb(176_242_213)]",
+  Unpaid: "bg-[rgb(254_221_241)] text-foreground border-[rgb(254_221_241)]",
+  "Partially Paid": "bg-[rgb(254_221_241)] text-foreground border-[rgb(254_221_241)]",
 };
 
 const PAYMENT_STATUS_MAP: Record<string, DisplayExpense["paymentStatus"]> = {
@@ -94,11 +94,7 @@ const PAYMENT_STATUS_MAP: Record<string, DisplayExpense["paymentStatus"]> = {
 };
 
 const REVIEW_STYLES: Record<ReviewIssue["tone"], string> = {
-  amber: "bg-amber-50 text-amber-700 border-amber-200",
-  orange: "bg-orange-50 text-orange-700 border-orange-200",
-  red: "bg-red-50 text-red-700 border-red-200",
-  blue: "bg-blue-50 text-blue-700 border-blue-200",
-  violet: "bg-violet-50 text-violet-700 border-violet-200",
+  pink: "bg-[rgb(254_221_241)] text-foreground border-[rgb(254_221_241)]",
 };
 
 const REVIEW_FILTERS: Array<{ value: ReviewFilterValue; label: string }> = [
@@ -245,7 +241,7 @@ function FilterSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="text-xs border border-border rounded-lg px-3 py-2 bg-white text-foreground appearance-none cursor-pointer hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors"
+      className="h-8 text-xs border border-border rounded-md px-2.5 bg-white text-foreground appearance-none cursor-pointer hover:bg-[rgb(248_248_248)] focus:outline-none focus:ring-2 focus:ring-foreground/10 transition-colors"
     >
       {options.map((o) => (
         <option key={o} value={o}>{o}</option>
@@ -585,6 +581,31 @@ export default function ExpensesTable() {
     }
   }
 
+  function isQuickViewActive(view: string) {
+    const thisMonth = currentMonthKey();
+    if (view === "This Month") return monthFilter === thisMonth && paymentFilter === "All Payments" && expenseTypeFilter === ALL_EXPENSE_TYPES;
+    if (view === "Last Month") return monthFilter === monthOffsetKey(-1);
+    if (view === "Last 3 Months") return fromDate === monthStart(monthOffsetKey(-2)) && toDate === monthEnd(thisMonth);
+    if (view === "Unpaid") return paymentFilter === "Unpaid";
+    if (view === "Needs Attention") return reviewFilter === "Any Attention";
+    if (view === "Paid This Month") return monthFilter === thisMonth && paymentFilter === "Paid";
+    if (view === "Salary This Month") return monthFilter === thisMonth && expenseTypeFilter === "Salary";
+    return false;
+  }
+
+  function quickViewActiveClass(view: string) {
+    if (view === "Unpaid" || view === "Needs Attention") {
+      return "border-[rgb(254_221_241)] bg-[rgb(254_221_241)] text-foreground";
+    }
+    if (view === "Paid This Month") {
+      return "border-[rgb(176_242_213)] bg-[rgb(176_242_213)] text-foreground";
+    }
+    if (view === "Salary This Month" || view === "Last 3 Months") {
+      return "border-[rgb(191_178_255)] bg-[rgb(191_178_255)] text-foreground";
+    }
+    return "border-[rgb(191_178_255)] bg-[rgb(191_178_255)] text-foreground";
+  }
+
   /** Determine the label for the receipt/document preview modal */
   function docLabel(e: DisplayExpense): string {
     if (e.documentType === "invoice") return "Invoice";
@@ -599,7 +620,7 @@ export default function ExpensesTable() {
           title="Expenses"
           subtitle="Loading…"
           action={
-            <button disabled className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-medium opacity-50">
+            <button disabled className="flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground opacity-50">
               <Plus className="w-3.5 h-3.5" />
               Add Expense
             </button>
@@ -621,12 +642,12 @@ export default function ExpensesTable() {
       <div className="flex flex-col min-h-screen">
         <Header title="Expenses" subtitle="Error loading data" />
         <div className="flex-1 flex items-center justify-center p-6">
-          <div className="max-w-sm w-full p-4 rounded-xl border border-red-200 bg-red-50 text-sm text-red-700 space-y-3">
+          <div className="max-w-sm w-full p-4 rounded-md border border-[rgb(254_221_241)] bg-[rgb(254_221_241)] text-sm text-foreground space-y-3">
             <p className="font-medium">Failed to load expenses</p>
             <p className="text-xs">{fetchError}</p>
             <button
               onClick={loadData}
-              className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition-colors"
+              className="px-3 py-1.5 rounded-md bg-foreground text-background text-xs font-medium hover:bg-neutral-700 transition-colors"
             >
               Retry
             </button>
@@ -645,7 +666,7 @@ export default function ExpensesTable() {
         action={
           <button
             onClick={openCreate}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-medium hover:bg-primary/90 transition-colors"
+            className="flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
           >
             <Plus className="w-3.5 h-3.5" />
             Add Expense
@@ -653,23 +674,23 @@ export default function ExpensesTable() {
         }
       />
 
-      <div className="p-6 space-y-4 flex-1">
+      <div className="px-6 py-5 space-y-5 flex-1">
         {/* Search and filters */}
-        <div className="space-y-3">
+        <div className="space-y-3 border-y border-border py-4">
           <div className="flex items-center gap-3">
             <div className="relative min-w-[320px] max-w-xl flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Search vendor, invoice, reference, amount, category, method, or notes"
-                className="h-10 w-full rounded-lg border border-border bg-white pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="h-9 w-full rounded-md border border-border bg-white pl-8 pr-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10"
               />
             </div>
             {hasFilters && (
               <button
                 onClick={clearFilters}
-                className="h-10 rounded-lg border border-border bg-white px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                className="h-9 rounded-md border border-border bg-white px-3 text-xs font-medium text-foreground transition-colors hover:bg-[rgb(248_248_248)]"
               >
                 Clear filters
               </button>
@@ -681,7 +702,12 @@ export default function ExpensesTable() {
               <button
                 key={view}
                 onClick={() => applyQuickView(view)}
-                className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
+                className={cn(
+                  "rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                  isQuickViewActive(view)
+                    ? quickViewActiveClass(view)
+                    : "border-border bg-white text-muted-foreground hover:bg-[rgb(248_248_248)] hover:text-foreground"
+                )}
               >
                 {view}
               </button>
@@ -695,14 +721,14 @@ export default function ExpensesTable() {
               type="date"
               value={fromDate}
               onChange={(event) => setFromDate(event.target.value)}
-              className="text-xs border border-border rounded-lg px-3 py-2 bg-white text-foreground hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors"
+              className="h-8 text-xs border border-border rounded-md px-2.5 bg-white text-foreground hover:bg-[rgb(248_248_248)] focus:outline-none focus:ring-2 focus:ring-foreground/10 transition-colors"
               aria-label="From date"
             />
             <input
               type="date"
               value={toDate}
               onChange={(event) => setToDate(event.target.value)}
-              className="text-xs border border-border rounded-lg px-3 py-2 bg-white text-foreground hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors"
+              className="h-8 text-xs border border-border rounded-md px-2.5 bg-white text-foreground hover:bg-[rgb(248_248_248)] focus:outline-none focus:ring-2 focus:ring-foreground/10 transition-colors"
               aria-label="To date"
             />
             <FilterSelect options={categoryOptions} value={category} onChange={setCategory} />
@@ -727,9 +753,9 @@ export default function ExpensesTable() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-border bg-white px-4 py-3 shadow-sm">
+        <div className="border-y border-border bg-white py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-medium text-foreground">
+            <p className="text-xs font-medium text-foreground">
               Showing {filtered.length} of {expenses.length} expenses
             </p>
             <div className="flex flex-wrap items-center gap-4 text-xs">
@@ -737,54 +763,54 @@ export default function ExpensesTable() {
                 Total: <span className="font-semibold text-foreground">₹{total.toLocaleString("en-IN")}</span>
               </span>
               <span className="text-muted-foreground">
-                Paid: <span className="font-semibold text-green-700">₹{paidTotal.toLocaleString("en-IN")}</span>
+                Paid: <span className="font-semibold text-foreground">₹{paidTotal.toLocaleString("en-IN")}</span>
               </span>
               <span className="text-muted-foreground">
-                Unpaid: <span className="font-semibold text-orange-700">₹{unpaidTotal.toLocaleString("en-IN")}</span>
+                Unpaid: <span className="font-semibold text-foreground">₹{unpaidTotal.toLocaleString("en-IN")}</span>
               </span>
             </div>
           </div>
         </div>
 
         {/* Table */}
-        <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white border-y border-border overflow-hidden">
+          <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-border bg-muted/40">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Date</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Vendor</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Category</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Description</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Method</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground">Amount</th>
-                <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground">Docs</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Attention</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Status</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground">Payment</th>
-                <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground w-28">Actions</th>
+              <tr className="border-b border-border bg-white">
+                <th className="text-left px-4 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">Date</th>
+                <th className="text-left px-4 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">Vendor</th>
+                <th className="text-left px-4 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">Category</th>
+                <th className="text-left px-4 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">Description</th>
+                <th className="text-left px-4 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">Method</th>
+                <th className="text-right px-4 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">Amount</th>
+                <th className="text-center px-4 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">Docs</th>
+                <th className="text-left px-4 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">Attention</th>
+                <th className="text-left px-4 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">Status</th>
+                <th className="text-left px-4 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground">Payment</th>
+                <th className="text-center px-4 py-2.5 text-[10px] font-semibold uppercase text-muted-foreground w-28">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {filtered.map((e) => (
-                <tr key={e.id} className="hover:bg-muted/20 transition-colors group">
-                  <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{e.date}</td>
-                  <td className="px-4 py-3 text-xs font-medium text-foreground whitespace-nowrap">{e.vendor}</td>
-                  <td className="px-4 py-3">
-                    <span className="text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground">
+                <tr key={e.id} className="hover:bg-[rgb(248_248_248)] transition-colors group">
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{e.date}</td>
+                  <td className="px-4 py-2.5 text-xs font-medium text-foreground whitespace-nowrap">{e.vendor}</td>
+                  <td className="px-4 py-2.5">
+                    <span className="text-[11px] px-1.5 py-0.5 rounded-sm bg-[rgb(248_248_248)] text-muted-foreground">
                       {e.category || "—"}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground max-w-[200px] truncate">
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground max-w-[200px] truncate">
                     {e.description || "—"}
                   </td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
                     {e.paymentMethod || "—"}
                   </td>
-                  <td className="px-4 py-3 text-xs font-semibold text-foreground text-right whitespace-nowrap">
+                  <td className="px-4 py-2.5 text-xs font-semibold text-foreground text-right whitespace-nowrap">
                     ₹{e.amount.toLocaleString("en-IN")}
                   </td>
                   {/* Docs column — receipt / invoice / payment proof icons */}
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-4 py-2.5 text-center">
                     <div className="flex items-center justify-center gap-1">
                       {e.receiptPath ? (
                         <button
@@ -796,7 +822,7 @@ export default function ExpensesTable() {
                             })
                           }
                           title={`View ${docLabel(e).toLowerCase()}`}
-                          className="w-6 h-6 rounded-md flex items-center justify-center text-green-500 hover:bg-green-50 hover:text-green-600 transition-colors"
+                          className="w-6 h-6 rounded-md flex items-center justify-center text-foreground hover:bg-[rgb(191_178_255)] transition-colors"
                         >
                           {e.documentType === "invoice" ? (
                             <FileText className="w-3.5 h-3.5" />
@@ -817,14 +843,14 @@ export default function ExpensesTable() {
                             })
                           }
                           title="View payment proof"
-                          className="w-6 h-6 rounded-md flex items-center justify-center text-blue-500 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                          className="w-6 h-6 rounded-md flex items-center justify-center text-foreground hover:bg-[rgb(191_178_255)] transition-colors"
                         >
                           <CheckCircle className="w-3.5 h-3.5" />
                         </button>
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2.5">
                     {e.reviewIssues.length > 0 ? (
                       <div className="flex flex-wrap gap-1 max-w-[180px]">
                         {e.reviewIssues.slice(0, 2).map((issue) => (
@@ -839,7 +865,7 @@ export default function ExpensesTable() {
                           </span>
                         ))}
                         {e.reviewIssues.length > 2 && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-border bg-muted text-muted-foreground font-medium">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-sm border border-border bg-[rgb(248_248_248)] text-muted-foreground font-medium">
                             +{e.reviewIssues.length - 2}
                           </span>
                         )}
@@ -848,10 +874,10 @@ export default function ExpensesTable() {
                       <span className="text-muted-foreground/40 text-xs">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2.5">
                     <span
                       className={cn(
-                        "text-[11px] px-2 py-0.5 rounded-md border font-medium",
+                        "text-[10px] px-1.5 py-0.5 rounded-sm border font-medium whitespace-nowrap",
                         STATUS_STYLES[e.status] ?? STATUS_STYLES["Draft"]
                       )}
                     >
@@ -859,17 +885,17 @@ export default function ExpensesTable() {
                     </span>
                   </td>
                   {/* Payment status */}
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2.5">
                     <span
                       className={cn(
-                        "text-[11px] px-2 py-0.5 rounded-md border font-medium",
+                        "text-[10px] px-1.5 py-0.5 rounded-sm border font-medium whitespace-nowrap",
                         PAYMENT_STATUS_STYLES[e.paymentStatus] ?? PAYMENT_STATUS_STYLES["Paid"]
                       )}
                     >
                       {e.paymentStatus}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2.5">
                     <div className="flex items-center justify-center gap-1">
                       <button
                         onClick={() => openDetails(e.id)}
@@ -883,7 +909,7 @@ export default function ExpensesTable() {
                         <button
                           onClick={() => setMarkPaidTarget(e)}
                           title="Mark as Paid"
-                          className="w-6 h-6 rounded-md flex items-center justify-center text-green-600 hover:bg-green-50 hover:text-green-700 transition-colors"
+                          className="w-6 h-6 rounded-md flex items-center justify-center text-foreground hover:bg-[rgb(176_242_213)] transition-colors"
                         >
                           <CheckCircle className="w-3 h-3" />
                         </button>
@@ -898,7 +924,7 @@ export default function ExpensesTable() {
                       <button
                         onClick={() => confirmDelete(e)}
                         title="Delete"
-                        className="w-6 h-6 rounded-md flex items-center justify-center text-muted-foreground hover:bg-red-50 hover:text-red-600 transition-colors"
+                        className="w-6 h-6 rounded-md flex items-center justify-center text-muted-foreground hover:bg-[rgb(254_221_241)] hover:text-foreground transition-colors"
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
@@ -924,7 +950,7 @@ export default function ExpensesTable() {
                     {hasFilters && (
                       <button
                         onClick={clearFilters}
-                        className="mt-3 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-primary/90"
+                        className="mt-3 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
                       >
                         Clear filters
                       </button>
@@ -936,7 +962,7 @@ export default function ExpensesTable() {
           </table>
 
           {filtered.length > 0 && (
-            <div className="px-4 py-3 border-t border-border bg-muted/20 flex items-center justify-between">
+            <div className="px-4 py-3 border-t border-border bg-white flex items-center justify-between">
               <p className="text-xs text-muted-foreground">{filtered.length} records</p>
               <p className="text-xs font-semibold text-foreground">
                 Total: ₹{total.toLocaleString("en-IN")}
@@ -1013,7 +1039,7 @@ export default function ExpensesTable() {
           </DialogHeader>
           <DialogBody>
             {deleteError && (
-              <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700">
+              <div className="mb-3 p-3 rounded-lg bg-[rgb(254_221_241)] border border-[rgb(254_221_241)] text-xs text-foreground">
                 {deleteError}
               </div>
             )}
@@ -1028,14 +1054,14 @@ export default function ExpensesTable() {
             <button
               disabled={isDeleting}
               onClick={() => setDeleteTarget(null)}
-              className="px-4 py-2 rounded-lg border border-border bg-white text-sm font-medium text-foreground hover:bg-muted disabled:opacity-60 transition-colors"
+              className="px-4 py-2 rounded-md border border-border bg-white text-sm font-medium text-foreground hover:bg-muted disabled:opacity-60 transition-colors"
             >
               Cancel
             </button>
             <button
               disabled={isDeleting}
               onClick={handleDelete}
-              className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-60 transition-colors"
+              className="px-4 py-2 rounded-md bg-foreground text-background text-sm font-medium hover:bg-neutral-700 disabled:opacity-60 transition-colors"
             >
               {isDeleting ? "Deleting…" : "Delete"}
             </button>

@@ -16,28 +16,28 @@ interface Props {
 
 export default function NeedsReviewQueue({ items }: Props) {
   return (
-    <div className="bg-white rounded-xl border border-border p-4 shadow-sm h-full">
-      <div className="flex items-center justify-between mb-4">
+    <div className="bg-white border-y border-border h-full">
+      <div className="flex items-center justify-between py-4 border-b border-border">
         <div className="flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 text-amber-500" />
-          <p className="text-sm font-semibold text-foreground">Needs Attention</p>
-          <span className="px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-600 text-[11px] font-semibold">
+          <AlertCircle className="w-4 h-4 text-foreground" />
+          <p className="text-[13px] font-semibold text-foreground">Needs Attention</p>
+          <span className="px-1.5 py-0.5 rounded-sm bg-[rgb(254_221_241)] text-foreground text-[11px] font-semibold">
             {items.length}
           </span>
         </div>
-        <Link href="/expenses" className="text-xs text-primary hover:underline font-medium">
+        <Link href="/expenses" className="text-xs text-foreground hover:underline font-medium">
           View all
         </Link>
       </div>
 
-      <div className="space-y-2">
+      <div className="divide-y divide-border">
         {items.map((e) => (
           <div
             key={e.id}
-            className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-amber-50/50 border border-amber-100 hover:bg-amber-50 transition-colors"
+            className="flex items-center justify-between py-3 hover:bg-[rgb(248_248_248)] transition-colors"
           >
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center text-amber-600 flex-shrink-0">
+              <div className="w-7 h-7 rounded-md bg-[rgb(248_248_248)] flex items-center justify-center text-foreground flex-shrink-0">
                 <AlertCircle className="w-3.5 h-3.5" />
               </div>
               <div className="min-w-0">
@@ -48,7 +48,7 @@ export default function NeedsReviewQueue({ items }: Props) {
               </div>
             </div>
             <div className="flex items-center gap-3 flex-shrink-0 ml-3">
-              <span className="text-[11px] px-1.5 py-0.5 rounded-md bg-white border border-amber-200 text-amber-700 font-medium">
+              <span className="text-[11px] px-1.5 py-0.5 rounded-sm bg-[rgb(254_221_241)] text-foreground font-medium">
                 {e.issue ?? "Review"}
               </span>
               <span className="text-xs text-muted-foreground">{e.date.slice(5)}</span>

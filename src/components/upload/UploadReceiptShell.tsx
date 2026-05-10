@@ -103,17 +103,25 @@ const CAPTURE_MODES: Array<{
   },
 ];
 
+function selectedCaptureModeClass(mode: CaptureMode) {
+  if (mode === "unpaid_bill") return "bg-[rgb(254_221_241)] text-foreground";
+  if (mode === "paid_bill_proof" || mode === "payment_proof_only") {
+    return "bg-[rgb(191_178_255)] text-foreground";
+  }
+  return "bg-[rgb(191_178_255)] text-foreground";
+}
+
 const inputCls =
-  "w-full h-9 px-3 text-sm rounded-lg border border-border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors disabled:opacity-60";
+  "w-full h-9 px-3 text-sm rounded-md border border-border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10 focus:border-foreground transition-colors disabled:opacity-60";
 
 const inputHighlightCls =
-  "w-full h-9 px-3 text-sm rounded-lg border border-amber-300 bg-amber-50/40 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-300/40 focus:border-amber-400 transition-colors disabled:opacity-60";
+  "w-full h-9 px-3 text-sm rounded-md border border-[rgb(254_221_241)] bg-[rgb(254_221_241)]/35 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10 focus:border-foreground transition-colors disabled:opacity-60";
 
 const selectCls =
-  "w-full h-9 px-3 text-sm rounded-lg border border-border bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors disabled:opacity-60 appearance-none cursor-pointer";
+  "w-full h-9 px-3 text-sm rounded-md border border-border bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10 focus:border-foreground transition-colors disabled:opacity-60 appearance-none cursor-pointer";
 
 const selectHighlightCls =
-  "w-full h-9 px-3 text-sm rounded-lg border border-amber-300 bg-amber-50/40 text-foreground focus:outline-none focus:ring-2 focus:ring-amber-300/40 focus:border-amber-400 transition-colors disabled:opacity-60 appearance-none cursor-pointer";
+  "w-full h-9 px-3 text-sm rounded-md border border-[rgb(254_221_241)] bg-[rgb(254_221_241)]/35 text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10 focus:border-foreground transition-colors disabled:opacity-60 appearance-none cursor-pointer";
 
 function FormField({
   label,
@@ -130,9 +138,9 @@ function FormField({
     <div>
       <label className="flex items-center gap-1 text-xs font-medium text-foreground mb-1.5">
         {label}
-        {required && <span className="text-red-500 ml-0.5">*</span>}
+        {required && <span className="text-foreground ml-0.5">*</span>}
         {needsReview && (
-          <span className="ml-1 text-[10px] font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded px-1 py-0.5">
+          <span className="ml-1 text-[10px] font-medium text-foreground bg-[rgb(254_221_241)] border border-[rgb(254_221_241)] rounded-sm px-1 py-0.5">
             Review
           </span>
         )}
@@ -456,25 +464,25 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
         subtitle="Upload a receipt or invoice and review expense details"
       />
 
-      <div className="p-6 flex-1">
+      <div className="px-6 py-5 flex-1">
         {/* ── Success state ── */}
         {phase === "saved" && (
           <div className="max-w-md mx-auto mt-16 text-center space-y-4">
-            <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center mx-auto">
-              <CheckCircle className="w-8 h-8 text-green-600" />
+            <div className="w-14 h-14 rounded-full bg-[rgb(176_242_213)] flex items-center justify-center mx-auto">
+              <CheckCircle className="w-8 h-8 text-foreground" />
             </div>
             <p className="text-lg font-semibold text-foreground">{savedLabel}</p>
             <p className="text-sm text-muted-foreground">{savedSubLabel}</p>
             <div className="flex items-center justify-center gap-3 pt-2">
               <button
                 onClick={() => router.push("/expenses")}
-                className="px-5 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors"
+                className="px-5 py-2 rounded-md bg-primary text-primary-foreground text-sm font-semibold transition-opacity hover:opacity-90"
               >
                 Go to Expenses
               </button>
               <button
                 onClick={resetForAnother}
-                className="px-5 py-2 rounded-lg border border-border bg-white text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                className="px-5 py-2 rounded-md border border-border bg-white text-sm font-medium text-foreground hover:bg-[rgb(248_248_248)] transition-colors"
               >
                 Upload Another
               </button>
@@ -484,12 +492,12 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
 
         {/* ── Main 2-col layout ── */}
         {phase !== "saved" && (
-          <div className="grid grid-cols-5 gap-5 h-full">
+          <div className="grid grid-cols-5 gap-6 h-full">
             {/* Left: Upload Zone + Preview */}
             <div className="col-span-2 flex flex-col gap-4">
-              <div className="bg-white rounded-xl border border-border shadow-sm p-3">
-                <p className="text-xs font-semibold text-foreground mb-2">Capture mode</p>
-                <div className="grid grid-cols-1 gap-2">
+              <div className="bg-white border-y border-border py-4">
+                <p className="text-[11px] font-semibold uppercase text-muted-foreground mb-2">Capture mode</p>
+                <div className="divide-y divide-border border-y border-border">
                   {CAPTURE_MODES.map((mode) => (
                     <button
                       key={mode.value}
@@ -497,10 +505,10 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                       onClick={() => handleModeChange(mode.value)}
                       disabled={isFormDisabled}
                       className={cn(
-                        "text-left p-3 rounded-lg border transition-colors",
+                        "w-full text-left px-3 py-3 transition-colors",
                         captureMode === mode.value
-                          ? "border-primary bg-primary/5"
-                          : "border-border bg-white hover:bg-muted/40"
+                          ? selectedCaptureModeClass(mode.value)
+                          : "bg-white hover:bg-[rgb(248_248_248)]"
                       )}
                     >
                       <p className="text-xs font-semibold text-foreground">{mode.title}</p>
@@ -520,14 +528,14 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                   onDragLeave={() => setDragging(false)}
                   onDrop={handleDrop}
                   className={cn(
-                    "flex flex-col items-center justify-center rounded-xl border-2 border-dashed transition-all min-h-[180px] p-6 text-center",
+                    "flex flex-col items-center justify-center rounded-md border border-dashed transition-colors min-h-[180px] p-6 text-center",
                     !uploaded && uploadingSlot !== "primary"
                       ? dragging
-                        ? "border-primary bg-accent scale-[1.01] cursor-copy"
-                        : "border-border bg-white hover:border-primary/50 hover:bg-accent/30 cursor-pointer"
+                        ? "border-foreground bg-[rgb(248_248_248)] cursor-copy"
+                        : "border-border bg-white hover:bg-[rgb(248_248_248)] cursor-pointer"
                       : uploadingSlot === "primary"
-                      ? "border-primary/40 bg-primary/5 cursor-default"
-                      : "border-green-300 bg-green-50/50 cursor-default"
+                      ? "border-[rgb(191_178_255)] bg-[rgb(191_178_255)]/25 cursor-default"
+                      : "border-[rgb(176_242_213)] bg-[rgb(176_242_213)]/30 cursor-default"
                   )}
                   onClick={() => {
                     if (!uploaded && uploadingSlot !== "primary") {
@@ -545,8 +553,8 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
 
                   {!uploaded && uploadingSlot !== "primary" && (
                   <>
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3">
-                      <Upload className="w-6 h-6 text-primary" />
+                    <div className="w-12 h-12 rounded-md bg-[rgb(248_248_248)] flex items-center justify-center mb-3">
+                      <Upload className="w-6 h-6 text-foreground" />
                     </div>
                     <p className="text-sm font-semibold text-foreground mb-1">
                       {isPaymentProofOnly ? "Drop payment proof or receipt here" : "Drop bill or invoice here"}
@@ -556,7 +564,7 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                       JPG, PNG, WebP, PDF · max 10 MB
                     </p>
                     {uploadError && (
-                      <div className="mt-3 flex items-center gap-1.5 text-xs text-red-600">
+                      <div className="mt-3 flex items-center gap-1.5 text-xs text-foreground">
                         <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
                         {uploadError}
                       </div>
@@ -566,8 +574,8 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
 
                   {uploadingSlot === "primary" && (
                   <>
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3 animate-pulse">
-                      <Upload className="w-6 h-6 text-primary" />
+                    <div className="w-12 h-12 rounded-md bg-[rgb(191_178_255)]/35 flex items-center justify-center mb-3 animate-pulse">
+                      <Upload className="w-6 h-6 text-foreground" />
                     </div>
                     <p className="text-sm font-semibold text-foreground mb-1">Uploading…</p>
                     <p className="text-xs text-muted-foreground">Please wait</p>
@@ -576,8 +584,8 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
 
                   {uploaded && uploadingSlot !== "primary" && (
                     <>
-                      <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center mb-3">
-                        <CheckCircle className="w-6 h-6 text-green-600" />
+                      <div className="w-12 h-12 rounded-md bg-[rgb(176_242_213)] flex items-center justify-center mb-3">
+                        <CheckCircle className="w-6 h-6 text-foreground" />
                       </div>
                       <p className="text-sm font-semibold text-foreground mb-1">
                         Upload complete
@@ -600,8 +608,8 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                   )}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-muted/30 min-h-[180px] p-6 text-center">
-                  <div className="w-12 h-12 rounded-xl bg-white border border-border flex items-center justify-center mb-3">
+                <div className="flex flex-col items-center justify-center rounded-md border border-border bg-[rgb(248_248_248)] min-h-[180px] p-6 text-center">
+                  <div className="w-12 h-12 rounded-md bg-white border border-border flex items-center justify-center mb-3">
                     <FileText className="w-6 h-6 text-muted-foreground" />
                   </div>
                   <p className="text-sm font-semibold text-foreground mb-1">Manual capture</p>
@@ -612,7 +620,7 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
               )}
 
               {isPaidBillWithProof && (
-                <div className="rounded-xl border border-border bg-white p-4">
+                <div className="border-y border-border bg-white py-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-semibold text-foreground">Payment proof</p>
@@ -622,7 +630,7 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                     </div>
                     <label
                       className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-white text-xs font-medium text-foreground hover:bg-muted transition-colors cursor-pointer",
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-white text-xs font-medium text-foreground hover:bg-[rgb(248_248_248)] transition-colors cursor-pointer",
                         isFormDisabled ? "opacity-60 pointer-events-none" : ""
                       )}
                     >
@@ -641,8 +649,8 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                     <p className="text-xs text-muted-foreground mt-3">Uploading payment proof…</p>
                   )}
                   {paymentProof && (
-                    <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-green-50 border border-green-200 px-3 py-2">
-                      <p className="text-xs text-green-700 truncate">{paymentProof.file.name}</p>
+                    <div className="mt-3 flex items-center justify-between gap-3 rounded-md bg-[rgb(191_178_255)] border border-[rgb(191_178_255)] px-3 py-2">
+                      <p className="text-xs text-foreground truncate">{paymentProof.file.name}</p>
                       <button
                         type="button"
                         disabled={isFormDisabled}
@@ -650,7 +658,7 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                           deleteReceiptFile(paymentProof.path).catch(() => {});
                           setPaymentProof(null);
                         }}
-                        className="text-[11px] text-green-700 hover:underline disabled:opacity-60"
+                        className="text-[11px] text-foreground hover:underline disabled:opacity-60"
                       >
                         Remove
                       </button>
@@ -660,7 +668,7 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
               )}
 
               {/* Receipt Preview */}
-              <div className="bg-white rounded-xl border border-border shadow-sm p-4 flex flex-col items-center justify-center min-h-[200px] flex-1">
+              <div className="bg-white border-y border-border py-4 flex flex-col items-center justify-center min-h-[200px] flex-1">
                 {!uploaded ? (
                   <div className="text-center">
                     <FileImage className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
@@ -676,18 +684,18 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                       <img
                         src={uploaded.signedUrl}
                         alt={uploaded.file.name}
-                        className="w-full rounded-lg object-contain max-h-[280px] border border-border"
+                        className="w-full rounded-md object-contain max-h-[280px] border border-border"
                       />
                     ) : (
-                      <div className="flex items-center justify-center h-32 rounded-lg bg-muted text-xs text-muted-foreground">
+                      <div className="flex items-center justify-center h-32 rounded-md bg-muted text-xs text-muted-foreground">
                         Preview unavailable
                       </div>
                     )}
                   </div>
                 ) : (
                   <div className="text-center space-y-3">
-                    <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center mx-auto">
-                      <FileText className="w-6 h-6 text-red-500" />
+                    <div className="w-12 h-12 rounded-md bg-[rgb(248_248_248)] flex items-center justify-center mx-auto">
+                      <FileText className="w-6 h-6 text-foreground" />
                     </div>
                     <div>
                       <p className="text-xs font-semibold text-foreground truncate max-w-[180px]">
@@ -702,7 +710,7 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                         href={uploaded.signedUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+                        className="inline-flex items-center gap-1.5 text-xs text-foreground hover:underline"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
                         Open PDF
@@ -715,11 +723,11 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
 
             {/* Right: Expense Details Form */}
             <div className="col-span-3">
-              <div className="bg-white rounded-xl border border-border shadow-sm h-full flex flex-col">
+              <div className="bg-white border-y border-border h-full flex flex-col">
                 {/* Panel header */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                   <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-primary" />
+                    <FileText className="w-4 h-4 text-foreground" />
                     <p className="text-sm font-semibold text-foreground">Expense Details</p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -733,7 +741,7 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                         type="button"
                         disabled={phase === "extracting"}
                         onClick={handleExtract}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-medium hover:bg-violet-700 disabled:opacity-60 transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[rgb(191_178_255)] text-foreground text-xs font-semibold transition-opacity hover:opacity-90 disabled:opacity-60"
                       >
                         {phase === "extracting" ? (
                           <>
@@ -755,7 +763,7 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                   {/* Empty / uploading placeholder */}
                   {(phase === "idle" || phase === "uploading") && (
                     <div className="h-full flex flex-col items-center justify-center text-center">
-                      <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center mb-3">
+                      <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center mb-3">
                         <Upload className="w-5 h-5 text-muted-foreground/50" />
                       </div>
                       <p className="text-sm text-muted-foreground font-medium">
@@ -774,8 +782,8 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                   {/* Extracting overlay */}
                   {phase === "extracting" && (
                     <div className="h-full flex flex-col items-center justify-center text-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-violet-50 flex items-center justify-center">
-                        <Sparkles className="w-6 h-6 text-violet-500 animate-pulse" />
+                      <div className="w-12 h-12 rounded-md bg-[rgb(191_178_255)]/35 flex items-center justify-center">
+                        <Sparkles className="w-6 h-6 text-foreground animate-pulse" />
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-foreground">
@@ -815,11 +823,11 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
 
                       {/* Mode banner */}
                       {isUnpaidBill && (
-                        <div className="p-3 rounded-lg bg-orange-50 border border-orange-200 flex items-start gap-2.5">
-                          <Info className="w-3.5 h-3.5 text-orange-500 mt-0.5 flex-shrink-0" />
-                          <div className="text-xs text-orange-800">
+                        <div className="p-3 rounded-md bg-[rgb(254_221_241)] border border-[rgb(254_221_241)] flex items-start gap-2.5">
+                          <Info className="w-3.5 h-3.5 text-foreground mt-0.5 flex-shrink-0" />
+                          <div className="text-xs text-foreground">
                             <p className="font-medium">This invoice will be saved as unpaid.</p>
-                            <p className="mt-0.5 text-orange-700">
+                            <p className="mt-0.5 text-foreground/80">
                               You can mark it as paid later from the Expenses page when payment is made.
                             </p>
                           </div>
@@ -827,11 +835,11 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                       )}
 
                       {isPaidBillWithProof && (
-                        <div className="p-3 rounded-lg bg-green-50 border border-green-200 flex items-start gap-2.5">
-                          <Info className="w-3.5 h-3.5 text-green-600 mt-0.5 flex-shrink-0" />
-                          <div className="text-xs text-green-800">
+                        <div className="p-3 rounded-md bg-[rgb(176_242_213)] border border-[rgb(176_242_213)] flex items-start gap-2.5">
+                          <Info className="w-3.5 h-3.5 text-foreground mt-0.5 flex-shrink-0" />
+                          <div className="text-xs text-foreground">
                             <p className="font-medium">This bill will be saved with payment details.</p>
-                            <p className="mt-0.5 text-green-700">
+                            <p className="mt-0.5 text-foreground/80">
                               Paid status is based on paid amount compared with bill amount.
                             </p>
                           </div>
@@ -842,10 +850,12 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                       <div className="flex items-center gap-2">
                         <span className="text-[11px] text-muted-foreground">Capture mode:</span>
                         <span className={cn(
-                          "text-[11px] font-medium px-2 py-0.5 rounded-md border",
+                          "text-[11px] font-medium px-2 py-0.5 rounded-sm border",
                           isUnpaidBill
-                            ? "bg-orange-50 text-orange-700 border-orange-200"
-                            : "bg-green-50 text-green-700 border-green-200"
+                            ? "bg-[rgb(254_221_241)] text-foreground border-[rgb(254_221_241)]"
+                            : isManual
+                            ? "bg-[rgb(191_178_255)] text-foreground border-[rgb(191_178_255)]"
+                            : "bg-[rgb(176_242_213)] text-foreground border-[rgb(176_242_213)]"
                         )}>
                           {selectedMode.title}
                         </span>
@@ -853,26 +863,26 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
 
                       {/* AI result banner */}
                       {aiData && (
-                        <div className="p-3 rounded-lg bg-violet-50 border border-violet-200 flex items-start gap-2.5">
-                          <Sparkles className="w-3.5 h-3.5 text-violet-500 mt-0.5 flex-shrink-0" />
+                        <div className="p-3 rounded-md bg-[rgb(191_178_255)]/25 border border-[rgb(191_178_255)] flex items-start gap-2.5">
+                          <Sparkles className="w-3.5 h-3.5 text-foreground mt-0.5 flex-shrink-0" />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-xs font-medium text-violet-800">
+                              <p className="text-xs font-medium text-foreground">
                                 AI extracted details
                               </p>
                               <span
                                 className={cn(
-                                  "text-[10px] font-semibold px-1.5 py-0.5 rounded border",
+                                  "text-[10px] font-semibold px-1.5 py-0.5 rounded-sm border",
                                   aiData.confidence >= CONFIDENCE_THRESHOLD
-                                    ? "bg-green-50 text-green-700 border-green-200"
-                                    : "bg-amber-50 text-amber-700 border-amber-200"
+                                    ? "bg-[rgb(176_242_213)] text-foreground border-[rgb(176_242_213)]"
+                                    : "bg-[rgb(254_221_241)] text-foreground border-[rgb(254_221_241)]"
                                 )}
                               >
                                 {Math.round(aiData.confidence * 100)}% confidence
                               </span>
                             </div>
                             {aiData.fields_needing_review.length > 0 && (
-                              <p className="text-[11px] text-violet-700 mt-0.5">
+                              <p className="text-[11px] text-muted-foreground mt-0.5">
                                 Review highlighted fields before saving.
                               </p>
                             )}
@@ -882,7 +892,7 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
 
                       {/* AI error banner */}
                       {aiError && (
-                        <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2 text-xs text-amber-800">
+                        <div className="p-3 rounded-md bg-[rgb(254_221_241)] border border-[rgb(254_221_241)] flex items-start gap-2 text-xs text-foreground">
                           <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                           <span>
                             <strong>AI extraction failed:</strong> {aiError} You can still
@@ -893,7 +903,7 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
 
                       {/* Save error banner */}
                       {saveError && (
-                        <div className="p-3 rounded-lg bg-red-50 border border-red-200 flex items-start gap-2 text-xs text-red-700">
+                        <div className="p-3 rounded-md bg-[rgb(254_221_241)] border border-[rgb(254_221_241)] flex items-start gap-2 text-xs text-foreground">
                           <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                           {saveError}
                         </div>
@@ -1157,7 +1167,7 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                           value={fields.notes}
                           onChange={(e) => setField("notes", e.target.value)}
                           placeholder="Optional"
-                          className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors resize-none disabled:opacity-60"
+                          className="w-full px-3 py-2 text-sm rounded-md border border-border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10 focus:border-foreground transition-colors resize-none disabled:opacity-60"
                         />
                       </FormField>
 
@@ -1167,10 +1177,10 @@ export default function UploadReceiptShell({ categoryRows, paymentMethodRows }: 
                           type="submit"
                           disabled={isFormDisabled}
                           className={cn(
-                            "flex items-center gap-1.5 px-4 py-2 rounded-lg text-white text-sm font-medium disabled:opacity-60 transition-colors",
+                            "flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-semibold disabled:opacity-60 transition-colors",
                             isUnpaidBill
-                              ? "bg-orange-600 hover:bg-orange-700"
-                              : "bg-primary hover:bg-primary/90"
+                              ? "bg-[rgb(191_178_255)] text-primary-foreground hover:opacity-90"
+                              : "bg-primary text-primary-foreground hover:opacity-90"
                           )}
                         >
                           <Save className="w-3.5 h-3.5" />

@@ -51,7 +51,7 @@ function FormField({
     <div>
       <label className="mb-1.5 block text-xs font-medium text-foreground">
         {label}
-        {required && <span className="ml-0.5 text-red-500">*</span>}
+        {required && <span className="ml-0.5 text-foreground">*</span>}
       </label>
       {children}
     </div>
@@ -59,10 +59,10 @@ function FormField({
 }
 
 const inputCls =
-  "h-9 w-full rounded-lg border border-border bg-white px-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60";
+  "h-9 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10 disabled:opacity-60";
 
 const selectCls =
-  "h-9 w-full cursor-pointer appearance-none rounded-lg border border-border bg-white px-3 text-sm text-foreground transition-colors focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60";
+  "h-9 w-full cursor-pointer appearance-none rounded-md border border-border bg-white px-3 text-sm text-foreground transition-colors focus:border-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10 disabled:opacity-60";
 
 export default function EmployeeFormModal({
   open,
@@ -106,7 +106,7 @@ export default function EmployeeFormModal({
 
           <DialogBody className="space-y-4">
             {state?.error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+              <div className="rounded-md border border-[rgb(254_221_241)] bg-[rgb(254_221_241)] p-3 text-xs text-foreground">
                 {state.error}
               </div>
             )}
@@ -228,13 +228,13 @@ export default function EmployeeFormModal({
                 </select>
               </FormField>
               <FormField label="Status">
-                <label className="flex h-9 items-center gap-2 rounded-lg border border-border bg-white px-3 text-sm text-foreground">
+                <label className="flex h-9 items-center gap-2 rounded-md border border-border bg-white px-3 text-sm text-foreground">
                   <input
                     type="checkbox"
                     name="is_active"
                     disabled={isPending}
                     defaultChecked={employee?.is_active ?? true}
-                    className="h-4 w-4 accent-primary"
+                    className="h-4 w-4 accent-[rgb(24_24_24)]"
                   />
                   Active
                 </label>
@@ -248,7 +248,7 @@ export default function EmployeeFormModal({
                 disabled={isPending}
                 defaultValue={employee?.notes ?? ""}
                 placeholder="Optional"
-                className="w-full resize-none rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+                className="w-full resize-none rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10 disabled:opacity-60"
               />
             </FormField>
           </DialogBody>
@@ -258,14 +258,14 @@ export default function EmployeeFormModal({
               type="button"
               disabled={isPending}
               onClick={() => onOpenChange(false)}
-              className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-60"
+              className="rounded-md border border-border bg-white px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-[rgb(248_248_248)] disabled:opacity-60"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isPending}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:opacity-60"
+              className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
             >
               {isPending ? "Saving..." : isEdit ? "Save Changes" : "Add Employee"}
             </button>

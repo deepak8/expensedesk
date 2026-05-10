@@ -41,7 +41,7 @@ export default async function RootLayout({
       <body className="bg-background text-foreground h-full">
         <div className="flex h-screen overflow-hidden">
           {showSidebar && <Sidebar />}
-          <main className="flex-1 overflow-y-auto min-w-0">{children}</main>
+          <main className="flex-1 overflow-y-auto min-w-0 bg-background">{children}</main>
         </div>
       </body>
     </html>

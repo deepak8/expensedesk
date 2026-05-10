@@ -18,9 +18,9 @@ import { cn } from "@/lib/utils";
 type CsvValue = string | number | boolean | null | undefined;
 
 const PAYMENT_STATUS_STYLES: Record<PaymentStatus, string> = {
-  paid: "bg-green-50 text-green-700 border-green-200",
-  unpaid: "bg-orange-50 text-orange-700 border-orange-200",
-  partially_paid: "bg-amber-50 text-amber-700 border-amber-200",
+  paid: "bg-[rgb(176_242_213)] text-foreground border-[rgb(176_242_213)]",
+  unpaid: "bg-[rgb(254_221_241)] text-foreground border-[rgb(254_221_241)]",
+  partially_paid: "bg-[rgb(254_221_241)] text-foreground border-[rgb(254_221_241)]",
 };
 
 function currentMonthKey() {
@@ -77,7 +77,7 @@ function StatusBadge({ status }: { status: PaymentStatus }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium",
+        "inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[10px] font-medium",
         PAYMENT_STATUS_STYLES[status]
       )}
     >
@@ -90,7 +90,7 @@ function ExportButton({ children, onClick }: { children: ReactNode; onClick: () 
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+      className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-white px-3 text-xs font-medium text-foreground transition-colors hover:bg-[rgb(248_248_248)]"
     >
       <Download className="h-3.5 w-3.5" />
       {children}
@@ -100,9 +100,9 @@ function ExportButton({ children, onClick }: { children: ReactNode; onClick: () 
 
 function SummaryCard({ label, value, meta }: { label: string; value: string; meta: string }) {
   return (
-    <div className="rounded-xl border border-border bg-white p-4 shadow-sm">
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <p className="mt-2 text-xl font-semibold text-foreground">{value}</p>
+    <div className="bg-white p-4">
+      <p className="text-[11px] font-semibold uppercase text-muted-foreground">{label}</p>
+      <p className="mt-2 text-[22px] font-semibold leading-none text-foreground">{value}</p>
       <p className="mt-1 text-xs text-muted-foreground">{meta}</p>
     </div>
   );
@@ -126,10 +126,10 @@ function TableSection({
   children: ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-xl border border-border bg-white shadow-sm">
+    <section className="overflow-hidden border-y border-border bg-white">
       <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
         <div>
-          <p className="text-sm font-semibold text-foreground">{title}</p>
+          <p className="text-[13px] font-semibold text-foreground">{title}</p>
           {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
         </div>
         {action}
@@ -138,14 +138,14 @@ function TableSection({
         <div className="px-5 py-10 text-center text-sm text-muted-foreground">{emptyText}</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-border bg-muted/40">
+              <tr className="border-b border-border bg-white">
                 {headers.map((header) => (
                   <th
                     key={header}
                     className={cn(
-                      "px-5 py-3 text-left text-xs font-semibold text-muted-foreground",
+                      "px-5 py-2.5 text-left text-[10px] font-semibold uppercase text-muted-foreground",
                       header.includes("Amount") || header === "Count" ? "text-right" : ""
                     )}
                   >
@@ -259,12 +259,12 @@ export default function ReportsShell() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col bg-background">
       <Header
         title="Reports"
         subtitle={subtitle}
         action={
-          <label className="flex items-center gap-2 rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-foreground">
+          <label className="flex h-8 items-center gap-2 rounded-md border border-border bg-white px-3 text-xs font-medium text-foreground">
             <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
             <input
               type="month"
@@ -276,9 +276,9 @@ export default function ReportsShell() {
         }
       />
 
-      <main className="flex-1 space-y-5 p-6">
+      <main className="flex-1 space-y-6 px-6 py-5">
         {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="rounded-md border border-[rgb(254_221_241)] bg-[rgb(254_221_241)] px-4 py-3 text-sm text-foreground">
             {error}
           </div>
         )}
@@ -292,7 +292,7 @@ export default function ReportsShell() {
           </div>
         ) : report ? (
           <>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 border-y border-border py-3">
               <ExportButton onClick={() => exportFile("expenses", expenseCsvColumns, report.expenses)}>
                 All Expenses
               </ExportButton>
@@ -313,7 +313,7 @@ export default function ReportsShell() {
               </ExportButton>
             </div>
 
-            <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <section className="grid grid-cols-1 border-y border-border sm:grid-cols-2 sm:divide-x sm:divide-border xl:grid-cols-4">
               <SummaryCard
                 label="Total Expenses"
                 value={fmtCurrency(report.summary.totalExpenses)}
@@ -366,11 +366,11 @@ export default function ReportsShell() {
               >
                 {report.paymentStatusSummary.map((row: PaymentStatusSummaryRow) => (
                   <tr key={row.status}>
-                    <td className="px-5 py-3"><StatusBadge status={row.status} /></td>
-                    <td className="px-5 py-3 text-right text-xs font-semibold">{fmtCurrency(row.totalAmount)}</td>
-                    <td className="px-5 py-3 text-right text-xs text-muted-foreground">{fmtCurrency(row.paidAmount)}</td>
-                    <td className="px-5 py-3 text-right text-xs text-muted-foreground">{fmtCurrency(row.unpaidAmount)}</td>
-                    <td className="px-5 py-3 text-right text-xs text-muted-foreground">{row.count}</td>
+                    <td className="px-5 py-2.5"><StatusBadge status={row.status} /></td>
+                    <td className="px-5 py-2.5 text-right text-xs font-semibold">{fmtCurrency(row.totalAmount)}</td>
+                    <td className="px-5 py-2.5 text-right text-xs text-muted-foreground">{fmtCurrency(row.paidAmount)}</td>
+                    <td className="px-5 py-2.5 text-right text-xs text-muted-foreground">{fmtCurrency(row.unpaidAmount)}</td>
+                    <td className="px-5 py-2.5 text-right text-xs text-muted-foreground">{row.count}</td>
                   </tr>
                 ))}
               </TableSection>
@@ -390,11 +390,11 @@ export default function ReportsShell() {
                 >
                   {report.categorySummary.map((row: CategorySummaryRow) => (
                     <tr key={row.category}>
-                      <td className="px-5 py-3 text-xs font-medium text-foreground">{row.category}</td>
-                      <td className="px-5 py-3 text-right text-xs font-semibold">{fmtCurrency(row.totalAmount)}</td>
-                      <td className="px-5 py-3 text-right text-xs text-muted-foreground">{fmtCurrency(row.paidAmount)}</td>
-                      <td className="px-5 py-3 text-right text-xs text-muted-foreground">{fmtCurrency(row.unpaidAmount)}</td>
-                      <td className="px-5 py-3 text-right text-xs text-muted-foreground">{row.count}</td>
+                      <td className="px-5 py-2.5 text-xs font-medium text-foreground">{row.category}</td>
+                      <td className="px-5 py-2.5 text-right text-xs font-semibold">{fmtCurrency(row.totalAmount)}</td>
+                      <td className="px-5 py-2.5 text-right text-xs text-muted-foreground">{fmtCurrency(row.paidAmount)}</td>
+                      <td className="px-5 py-2.5 text-right text-xs text-muted-foreground">{fmtCurrency(row.unpaidAmount)}</td>
+                      <td className="px-5 py-2.5 text-right text-xs text-muted-foreground">{row.count}</td>
                     </tr>
                   ))}
                 </TableSection>
@@ -411,12 +411,12 @@ export default function ReportsShell() {
             >
               {report.vendorSummary.map((row: VendorSummaryRow) => (
                 <tr key={row.vendor}>
-                  <td className="px-5 py-3 text-xs font-medium text-foreground">{row.vendor}</td>
-                  <td className="px-5 py-3 text-right text-xs font-semibold">{fmtCurrency(row.totalAmount)}</td>
-                  <td className="px-5 py-3 text-right text-xs text-muted-foreground">{fmtCurrency(row.paidAmount)}</td>
-                  <td className="px-5 py-3 text-right text-xs text-muted-foreground">{fmtCurrency(row.unpaidAmount)}</td>
-                  <td className="px-5 py-3 text-right text-xs text-muted-foreground">{row.count}</td>
-                  <td className="px-5 py-3 text-xs text-muted-foreground">{row.lastExpenseDate}</td>
+                  <td className="px-5 py-2.5 text-xs font-medium text-foreground">{row.vendor}</td>
+                  <td className="px-5 py-2.5 text-right text-xs font-semibold">{fmtCurrency(row.totalAmount)}</td>
+                  <td className="px-5 py-2.5 text-right text-xs text-muted-foreground">{fmtCurrency(row.paidAmount)}</td>
+                  <td className="px-5 py-2.5 text-right text-xs text-muted-foreground">{fmtCurrency(row.unpaidAmount)}</td>
+                  <td className="px-5 py-2.5 text-right text-xs text-muted-foreground">{row.count}</td>
+                  <td className="px-5 py-2.5 text-xs text-muted-foreground">{row.lastExpenseDate}</td>
                 </tr>
               ))}
             </TableSection>
@@ -431,11 +431,11 @@ export default function ReportsShell() {
             >
               {report.salaryReport.map((row: SalaryReportRow) => (
                 <tr key={row.id}>
-                  <td className="px-5 py-3 text-xs font-medium text-foreground">{row.employee}</td>
-                  <td className="px-5 py-3 text-right text-xs font-semibold">{fmtCurrency(row.amount)}</td>
-                  <td className="px-5 py-3"><StatusBadge status={row.paymentStatus} /></td>
-                  <td className="px-5 py-3 text-xs text-muted-foreground">{row.paymentDate ?? "—"}</td>
-                  <td className="px-5 py-3 text-xs text-muted-foreground">{row.paymentMethod}</td>
+                  <td className="px-5 py-2.5 text-xs font-medium text-foreground">{row.employee}</td>
+                  <td className="px-5 py-2.5 text-right text-xs font-semibold">{fmtCurrency(row.amount)}</td>
+                  <td className="px-5 py-2.5"><StatusBadge status={row.paymentStatus} /></td>
+                  <td className="px-5 py-2.5 text-xs text-muted-foreground">{row.paymentDate ?? "—"}</td>
+                  <td className="px-5 py-2.5 text-xs text-muted-foreground">{row.paymentMethod}</td>
                 </tr>
               ))}
             </TableSection>
@@ -450,16 +450,16 @@ export default function ReportsShell() {
             >
               {report.needsAttention.map((row: NeedsAttentionReportRow) => (
                 <tr key={row.id}>
-                  <td className="px-5 py-3 text-xs text-muted-foreground">{row.date}</td>
-                  <td className="px-5 py-3 text-xs font-medium text-foreground">{row.vendor}</td>
-                  <td className="px-5 py-3 text-right text-xs font-semibold">{fmtCurrency(row.amount)}</td>
-                  <td className="px-5 py-3"><StatusBadge status={row.paymentStatus} /></td>
-                  <td className="px-5 py-3">
+                  <td className="px-5 py-2.5 text-xs text-muted-foreground">{row.date}</td>
+                  <td className="px-5 py-2.5 text-xs font-medium text-foreground">{row.vendor}</td>
+                  <td className="px-5 py-2.5 text-right text-xs font-semibold">{fmtCurrency(row.amount)}</td>
+                  <td className="px-5 py-2.5"><StatusBadge status={row.paymentStatus} /></td>
+                  <td className="px-5 py-2.5">
                     <div className="flex flex-wrap gap-1">
                       {row.issues.map((issue) => (
                         <span
                           key={issue}
-                          className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700"
+                          className="inline-flex items-center gap-1 rounded-sm border border-[rgb(254_221_241)] bg-[rgb(254_221_241)] px-1.5 py-0.5 text-[10px] font-medium text-foreground"
                         >
                           <AlertTriangle className="h-3 w-3" />
                           {issue}

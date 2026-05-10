@@ -10,7 +10,7 @@ export type ReviewIssueType =
 export interface ReviewIssue {
   type: ReviewIssueType;
   label: string;
-  tone: "amber" | "orange" | "red" | "blue" | "violet";
+  tone: "pink";
 }
 
 export interface ReviewExpenseLike {
@@ -31,13 +31,13 @@ export interface ReviewExpenseLike {
 }
 
 export const REVIEW_ISSUES: Record<ReviewIssueType, ReviewIssue> = {
-  needs_review: { type: "needs_review", label: "Needs Review", tone: "amber" },
-  possible_duplicate: { type: "possible_duplicate", label: "Possible Duplicate", tone: "violet" },
-  unpaid: { type: "unpaid", label: "Unpaid", tone: "orange" },
-  partially_paid: { type: "partially_paid", label: "Partially Paid", tone: "amber" },
-  amount_mismatch: { type: "amount_mismatch", label: "Amount Mismatch", tone: "red" },
-  missing_proof: { type: "missing_proof", label: "Missing Proof", tone: "blue" },
-  low_ai_confidence: { type: "low_ai_confidence", label: "Low AI Confidence", tone: "amber" },
+  needs_review: { type: "needs_review", label: "Needs Review", tone: "pink" },
+  possible_duplicate: { type: "possible_duplicate", label: "Possible Duplicate", tone: "pink" },
+  unpaid: { type: "unpaid", label: "Unpaid", tone: "pink" },
+  partially_paid: { type: "partially_paid", label: "Partially Paid", tone: "pink" },
+  amount_mismatch: { type: "amount_mismatch", label: "Amount Mismatch", tone: "pink" },
+  missing_proof: { type: "missing_proof", label: "Missing Proof", tone: "pink" },
+  low_ai_confidence: { type: "low_ai_confidence", label: "Low AI Confidence", tone: "pink" },
 };
 
 const LOW_AI_CONFIDENCE = 0.85;

@@ -26,12 +26,12 @@ export default function DashboardShell({ monthLabel, monthSubtitle, monthlyTrend
   const { summary, categorySplit, paymentSplit, topVendors, needsReview } = dashboard;
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen bg-background">
       <Header title={monthLabel} subtitle={monthSubtitle} />
 
-      <div className="p-6 space-y-6 flex-1">
+      <div className="px-6 py-5 space-y-6 flex-1">
         {/* Summary Cards */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-4 border-y border-border divide-x divide-border">
           <SummaryCard
             label="Total Expenses"
             value={fmt(summary.totalExpenses)}
@@ -46,7 +46,7 @@ export default function DashboardShell({ monthLabel, monthSubtitle, monthlyTrend
             delta="+2.3% vs last month"
             deltaUp
             icon={<TrendingUp className="w-4 h-4" />}
-            accent="green"
+            accent="mint"
           />
           <SummaryCard
             label="Non-Salary"
@@ -61,23 +61,23 @@ export default function DashboardShell({ monthLabel, monthSubtitle, monthlyTrend
             value={fmt(summary.needsReview)}
             delta={`${needsReview.length} items pending`}
             icon={<AlertCircle className="w-4 h-4" />}
-            accent="amber"
+            accent="pink"
           />
         </div>
 
         {/* Charts Row */}
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-5 gap-6">
           <div className="col-span-3">
             <MonthlyTrendChart data={monthlyTrend} />
           </div>
-          <div className="col-span-2 grid grid-rows-2 gap-4">
+          <div className="col-span-2 grid grid-rows-2 gap-6">
             <CategorySplitChart data={categorySplit} />
             <PaymentSplitChart data={paymentSplit} />
           </div>
         </div>
 
         {/* Bottom Row */}
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-5 gap-6">
           <div className="col-span-2">
             <TopVendors data={topVendors} />
           </div>

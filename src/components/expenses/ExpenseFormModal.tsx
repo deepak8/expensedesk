@@ -47,7 +47,7 @@ function FormField({ label, required, children }: { label: string; required?: bo
     <div>
       <label className="block text-xs font-medium text-foreground mb-1.5">
         {label}
-        {required && <span className="text-red-500 ml-0.5">*</span>}
+        {required && <span className="text-foreground ml-0.5">*</span>}
       </label>
       {children}
     </div>
@@ -55,10 +55,10 @@ function FormField({ label, required, children }: { label: string; required?: bo
 }
 
 const inputCls =
-  "w-full h-9 px-3 text-sm rounded-lg border border-border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors disabled:opacity-60";
+  "w-full h-9 px-3 text-sm rounded-md border border-border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10 focus:border-foreground transition-colors disabled:opacity-60";
 
 const selectCls =
-  "w-full h-9 px-3 text-sm rounded-lg border border-border bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors disabled:opacity-60 appearance-none cursor-pointer";
+  "w-full h-9 px-3 text-sm rounded-md border border-border bg-white text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10 focus:border-foreground transition-colors disabled:opacity-60 appearance-none cursor-pointer";
 
 export default function ExpenseFormModal({
   open,
@@ -158,7 +158,7 @@ export default function ExpenseFormModal({
         <form ref={formRef} onSubmit={handleSubmit}>
           <DialogBody className="space-y-4">
             {error && (
-              <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700">
+              <div className="p-3 rounded-md bg-[rgb(254_221_241)] border border-[rgb(254_221_241)] text-xs text-foreground">
                 {error}
               </div>
             )}
@@ -317,7 +317,7 @@ export default function ExpenseFormModal({
                 disabled={isPending}
                 defaultValue={expense?.notes ?? ""}
                 placeholder="Optional"
-                className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-colors resize-none disabled:opacity-60"
+                className="w-full px-3 py-2 text-sm rounded-md border border-border bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10 focus:border-foreground transition-colors resize-none disabled:opacity-60"
               />
             </FormField>
           </DialogBody>
@@ -327,14 +327,14 @@ export default function ExpenseFormModal({
               type="button"
               disabled={isPending}
               onClick={() => onOpenChange(false)}
-              className="px-4 py-2 rounded-lg border border-border bg-white text-sm font-medium text-foreground hover:bg-muted disabled:opacity-60 transition-colors"
+              className="px-4 py-2 rounded-md border border-border bg-white text-sm font-medium text-foreground hover:bg-[rgb(248_248_248)] disabled:opacity-60 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isPending}
-              className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 disabled:opacity-60 transition-colors"
+              className="px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-60"
             >
               {isPending ? (isEdit ? "Saving…" : "Adding…") : isEdit ? "Save Changes" : "Add Expense"}
             </button>

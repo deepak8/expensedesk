@@ -23,7 +23,10 @@ interface Props {
 }
 
 const inputCls =
-  "h-9 w-full rounded-lg border border-border bg-white px-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60";
+  "h-9 w-full rounded-md border border-border bg-white px-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10 disabled:opacity-60";
+
+const textareaCls =
+  "w-full resize-none rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground transition-colors focus:border-foreground focus:outline-none focus:ring-2 focus:ring-foreground/10";
 
 function Section({
   title,
@@ -35,9 +38,9 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-border bg-white shadow-sm">
+    <section className="border-y border-border bg-white">
       <div className="border-b border-border px-5 py-4">
-        <p className="text-sm font-semibold text-foreground">{title}</p>
+        <p className="text-[13px] font-semibold text-foreground">{title}</p>
         {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
       </div>
       <div className="p-5">{children}</div>
@@ -49,10 +52,10 @@ function StatusBadge({ active }: { active: boolean }) {
   return (
     <span
       className={cn(
-        "rounded-md border px-2 py-0.5 text-[11px] font-medium",
+        "rounded-sm border px-1.5 py-0.5 text-[10px] font-medium",
         active
-          ? "border-green-200 bg-green-50 text-green-700"
-          : "border-gray-200 bg-gray-100 text-gray-600"
+          ? "border-[rgb(176_242_213)] bg-[rgb(176_242_213)] text-foreground"
+          : "border-border bg-[rgb(248_248_248)] text-muted-foreground"
       )}
     >
       {active ? "Active" : "Inactive"}
@@ -86,12 +89,12 @@ export default function SettingsShell({ categories, paymentMethods, businessSett
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col bg-background">
       <Header title="Settings" subtitle="Manage basic app configuration" />
 
-      <div className="max-w-5xl flex-1 space-y-6 p-6">
+      <div className="max-w-5xl flex-1 space-y-6 px-6 py-5">
         {message && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="rounded-md border border-[rgb(254_221_241)] bg-[rgb(254_221_241)] px-4 py-3 text-sm text-foreground">
             {message}
           </div>
         )}
@@ -122,7 +125,7 @@ export default function SettingsShell({ categories, paymentMethods, businessSett
                 name="address"
                 rows={2}
                 defaultValue={businessSettings?.address ?? ""}
-                className="w-full resize-none rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className={textareaCls}
               />
             </label>
             <label className="block space-y-1.5">
@@ -131,10 +134,10 @@ export default function SettingsShell({ categories, paymentMethods, businessSett
                 name="notes"
                 rows={2}
                 defaultValue={businessSettings?.notes ?? ""}
-                className="w-full resize-none rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className={textareaCls}
               />
             </label>
-            <button className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90">
+            <button className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90">
               Save Business Profile
             </button>
           </form>
@@ -143,42 +146,42 @@ export default function SettingsShell({ categories, paymentMethods, businessSett
         <Section title="Categories" subtitle="Inactive categories are hidden from new-entry dropdowns but remain visible on existing expenses.">
           <form action={createCategoryAction} className="mb-4 flex max-w-md gap-2">
             <input name="name" required placeholder="Add category" className={inputCls} />
-            <button className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90">
+            <button className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90">
               Add
             </button>
           </form>
 
-          <div className="overflow-hidden rounded-xl border border-border">
-            <table className="w-full text-sm">
+          <div className="overflow-hidden border-y border-border">
+            <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-border bg-muted/40">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Category</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Type</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Status</th>
-                  <th className="px-4 py-3" />
+                <tr className="border-b border-border bg-white">
+                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase text-muted-foreground">Category</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase text-muted-foreground">Type</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase text-muted-foreground">Status</th>
+                  <th className="px-4 py-2.5" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {categories.map((category) => (
-                  <tr key={category.id}>
-                    <td className="px-4 py-3">
+                  <tr key={category.id} className="hover:bg-[rgb(248_248_248)] transition-colors">
+                    <td className="px-4 py-2.5">
                       {editingCategoryId === category.id ? (
                         <form action={updateCategoryAction} className="flex gap-2">
                           <input type="hidden" name="id" value={category.id} />
                           <input name="name" required defaultValue={category.name} className={inputCls} />
-                          <button className="rounded-lg bg-primary px-3 text-xs font-medium text-white">Save</button>
+                          <button className="rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground">Save</button>
                         </form>
                       ) : (
                         <span className="text-xs font-medium text-foreground">{category.name}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">—</td>
-                    <td className="px-4 py-3"><StatusBadge active={category.is_active} /></td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground">—</td>
+                    <td className="px-4 py-2.5"><StatusBadge active={category.is_active} /></td>
+                    <td className="px-4 py-2.5">
                       <div className="flex justify-end gap-1">
                         <button
                           onClick={() => setEditingCategoryId(editingCategoryId === category.id ? null : category.id)}
-                          className="flex h-7 items-center gap-1 rounded-lg px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          className="flex h-7 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-[rgb(248_248_248)] hover:text-foreground"
                         >
                           <Pencil className="h-3.5 w-3.5" />
                           Edit
@@ -186,7 +189,7 @@ export default function SettingsShell({ categories, paymentMethods, businessSett
                         <button
                           disabled={isPending}
                           onClick={() => toggleCategory(category)}
-                          className="flex h-7 items-center gap-1 rounded-lg px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
+                          className="flex h-7 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-[rgb(248_248_248)] hover:text-foreground disabled:opacity-60"
                         >
                           {category.is_active ? <XCircle className="h-3.5 w-3.5" /> : <RotateCcw className="h-3.5 w-3.5" />}
                           {category.is_active ? "Deactivate" : "Reactivate"}
@@ -203,40 +206,40 @@ export default function SettingsShell({ categories, paymentMethods, businessSett
         <Section title="Payment Methods" subtitle="Inactive methods are hidden from new payment dropdowns but preserved on older records.">
           <form action={createPaymentMethodAction} className="mb-4 flex max-w-md gap-2">
             <input name="name" required placeholder="Add payment method" className={inputCls} />
-            <button className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90">
+            <button className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90">
               Add
             </button>
           </form>
 
-          <div className="overflow-hidden rounded-xl border border-border">
-            <table className="w-full text-sm">
+          <div className="overflow-hidden border-y border-border">
+            <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-border bg-muted/40">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Payment Method</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Status</th>
-                  <th className="px-4 py-3" />
+                <tr className="border-b border-border bg-white">
+                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase text-muted-foreground">Payment Method</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase text-muted-foreground">Status</th>
+                  <th className="px-4 py-2.5" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {paymentMethods.map((method) => (
-                  <tr key={method.id}>
-                    <td className="px-4 py-3">
+                  <tr key={method.id} className="hover:bg-[rgb(248_248_248)] transition-colors">
+                    <td className="px-4 py-2.5">
                       {editingPaymentMethodId === method.id ? (
                         <form action={updatePaymentMethodAction} className="flex gap-2">
                           <input type="hidden" name="id" value={method.id} />
                           <input name="name" required defaultValue={method.name} className={inputCls} />
-                          <button className="rounded-lg bg-primary px-3 text-xs font-medium text-white">Save</button>
+                          <button className="rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground">Save</button>
                         </form>
                       ) : (
                         <span className="text-xs font-medium text-foreground">{method.name}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3"><StatusBadge active={method.is_active} /></td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-2.5"><StatusBadge active={method.is_active} /></td>
+                    <td className="px-4 py-2.5">
                       <div className="flex justify-end gap-1">
                         <button
                           onClick={() => setEditingPaymentMethodId(editingPaymentMethodId === method.id ? null : method.id)}
-                          className="flex h-7 items-center gap-1 rounded-lg px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          className="flex h-7 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-[rgb(248_248_248)] hover:text-foreground"
                         >
                           <Pencil className="h-3.5 w-3.5" />
                           Edit
@@ -244,7 +247,7 @@ export default function SettingsShell({ categories, paymentMethods, businessSett
                         <button
                           disabled={isPending}
                           onClick={() => togglePaymentMethod(method)}
-                          className="flex h-7 items-center gap-1 rounded-lg px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
+                          className="flex h-7 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-[rgb(248_248_248)] hover:text-foreground disabled:opacity-60"
                         >
                           {method.is_active ? <XCircle className="h-3.5 w-3.5" /> : <RotateCcw className="h-3.5 w-3.5" />}
                           {method.is_active ? "Deactivate" : "Reactivate"}
